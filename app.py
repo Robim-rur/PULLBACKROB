@@ -35,50 +35,120 @@ ADX_MINIMO = 20
 VOLUME_MINIMO = 20_000_000
 
 # =========================================================
+# SETORES
+# =========================================================
+
+SETORES = {
+
+    # =====================================================
+    # PETRÓLEO
+    # =====================================================
+
+    "PETR4.SA": "Petróleo",
+    "PRIO3.SA": "Petróleo",
+    "RRRP3.SA": "Petróleo",
+    "RECV3.SA": "Petróleo",
+
+    # =====================================================
+    # MINERAÇÃO / SIDERURGIA
+    # =====================================================
+
+    "VALE3.SA": "Mineração",
+    "GGBR4.SA": "Siderurgia",
+    "CSNA3.SA": "Siderurgia",
+    "GOAU4.SA": "Siderurgia",
+    "USIM5.SA": "Siderurgia",
+
+    # =====================================================
+    # BANCOS
+    # =====================================================
+
+    "ITUB4.SA": "Bancos",
+    "BBAS3.SA": "Bancos",
+    "BBDC4.SA": "Bancos",
+    "SANB11.SA": "Bancos",
+    "BPAC11.SA": "Bancos",
+
+    # =====================================================
+    # ENERGIA
+    # =====================================================
+
+    "EQTL3.SA": "Energia",
+    "TAEE11.SA": "Energia",
+    "EGIE3.SA": "Energia",
+
+    # =====================================================
+    # TELECOM
+    # =====================================================
+
+    "VIVT3.SA": "Telecom",
+    "TIMS3.SA": "Telecom",
+
+    # =====================================================
+    # INDUSTRIAL
+    # =====================================================
+
+    "WEGE3.SA": "Industrial",
+    "EMBR3.SA": "Industrial",
+    "TUPY3.SA": "Industrial",
+
+    # =====================================================
+    # CONSUMO
+    # =====================================================
+
+    "RADL3.SA": "Varejo Farma",
+    "LREN3.SA": "Varejo",
+    "ARZZ3.SA": "Varejo",
+
+    # =====================================================
+    # PROTEÍNA
+    # =====================================================
+
+    "JBSS3.SA": "Proteína",
+    "BEEF3.SA": "Proteína",
+    "MRFG3.SA": "Proteína",
+    "BRFS3.SA": "Proteína",
+
+    # =====================================================
+    # TECNOLOGIA
+    # =====================================================
+
+    "TOTS3.SA": "Tecnologia",
+    "POSI3.SA": "Tecnologia",
+
+    # =====================================================
+    # LOGÍSTICA
+    # =====================================================
+
+    "RAIL3.SA": "Logística",
+    "STBP3.SA": "Logística",
+
+    # =====================================================
+    # ETFs
+    # =====================================================
+
+    "BOVA11.SA": "ETF",
+    "IVVB11.SA": "ETF",
+    "SMAL11.SA": "ETF",
+    "HASH11.SA": "ETF",
+
+    # =====================================================
+    # BDRs
+    # =====================================================
+
+    "AAPL34.SA": "Tecnologia",
+    "GOGL34.SA": "Tecnologia",
+    "MSFT34.SA": "Tecnologia",
+    "TSLA34.SA": "Automóveis",
+    "META34.SA": "Tecnologia",
+    "NVDC34.SA": "Semicondutores"
+}
+
+# =========================================================
 # ATIVOS
 # =========================================================
 
-ATIVOS = [
-
-    # AÇÕES
-
-    "PETR4.SA",
-    "VALE3.SA",
-    "BBAS3.SA",
-    "ITUB4.SA",
-    "WEGE3.SA",
-    "PRIO3.SA",
-    "RENT3.SA",
-    "BBDC4.SA",
-    "GGBR4.SA",
-    "CSNA3.SA",
-    "GOAU4.SA",
-    "RAIL3.SA",
-    "SUZB3.SA",
-    "JBSS3.SA",
-    "EQTL3.SA",
-    "VIVT3.SA",
-    "TIMS3.SA",
-    "RADL3.SA",
-    "TOTS3.SA",
-    "EMBR3.SA",
-
-    # ETFs
-
-    "BOVA11.SA",
-    "IVVB11.SA",
-    "SMAL11.SA",
-    "HASH11.SA",
-
-    # BDRs
-
-    "AAPL34.SA",
-    "GOGL34.SA",
-    "MSFT34.SA",
-    "TSLA34.SA",
-    "META34.SA",
-    "NVDC34.SA"
-]
+ATIVOS = list(SETORES.keys())
 
 # =========================================================
 # DOWNLOAD
@@ -213,7 +283,7 @@ def calcular_indicadores(df):
     )
 
     # =====================================================
-    # CANDLE ESTICADO
+    # AMPLITUDE DO CANDLE
     # =====================================================
 
     df["AMPLITUDE"] = (
@@ -268,11 +338,7 @@ def calcular_probabilidade(
         semanal["D"]
     )
 
-    total = 0
-
-    gains = 0
-
-    losses = 0
+    trades = []
 
     for i in range(30, len(diario) - 30):
 
@@ -348,20 +414,18 @@ def calcular_probabilidade(
                 (1 - LOSS_FIXO)
             )
 
-            total += 1
-
             futuro = diario.iloc[
                 i + 1:i + 31
             ]
 
-            resultado = None
-
             entrada_acionada = False
+
+            resultado = None
 
             for _, prox in futuro.iterrows():
 
                 # =============================================
-                # ENTRADA ACIONADA
+                # ENTRADA
                 # =============================================
 
                 if not entrada_acionada:
@@ -395,6 +459,13 @@ def calcular_probabilidade(
                     break
 
             # =============================================
+            # IGNORA SE NÃO ENTROU
+            # =============================================
+
+            if not entrada_acionada:
+                continue
+
+            # =============================================
             # EXPIRAÇÃO
             # =============================================
 
@@ -412,34 +483,26 @@ def calcular_probabilidade(
 
                     resultado = "LOSS"
 
-            # =============================================
-            # CONTABILIZAÇÃO
-            # =============================================
-
-            if resultado == "GAIN":
-
-                gains += 1
-
-            else:
-
-                losses += 1
+            trades.append(resultado)
 
         except:
 
             continue
+
+    total = len(trades)
+
+    gains = trades.count("GAIN")
+
+    losses = trades.count("LOSS")
 
     if total == 0:
 
         return {
 
             "winrate": 0,
-
             "expectancia": 0,
-
             "gains": 0,
-
             "losses": 0,
-
             "sinais": 0
         }
 
@@ -455,13 +518,9 @@ def calcular_probabilidade(
     return {
 
         "winrate": winrate,
-
         "expectancia": expectancia,
-
         "gains": gains,
-
         "losses": losses,
-
         "sinais": total
     }
 
@@ -579,6 +638,11 @@ def executar_scanner():
 
                 "Ativo": ativo,
 
+                "Setor": SETORES.get(
+                    ativo,
+                    "Outros"
+                ),
+
                 "Entrada": entrada,
 
                 "Gain": gain,
@@ -601,7 +665,9 @@ def executar_scanner():
                 ),
 
                 "Financeiro (Mi)": round(
-                    float(d["Financeiro"] / 1_000_000),
+                    float(
+                        d["Financeiro"] / 1_000_000
+                    ),
                     1
                 ),
 
@@ -680,7 +746,7 @@ st.markdown("""
 - Candle não esticado
 - Estocástico semanal alinhado
 - Entrada acima da máxima
-- Gain fixo 5%
+- Gain fixo 3%
 - Loss fixo 4%
 
 """)
@@ -713,7 +779,7 @@ if st.button("▶ Executar Scanner"):
             ),
             use_container_width=True,
             hide_index=True,
-            height=750
+            height=800
         )
 
         fig = px.scatter(
@@ -725,6 +791,8 @@ if st.button("▶ Executar Scanner"):
             y="Score",
 
             size="Sinais",
+
+            color="Setor",
 
             hover_data=["Ativo"],
 
