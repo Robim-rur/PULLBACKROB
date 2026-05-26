@@ -1,7 +1,3 @@
-# =========================================================
-# APP.PY
-# =========================================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -9,6 +5,7 @@ import yfinance as yf
 import plotly.express as px
 
 from ta.trend import ADXIndicator
+from ta.trend import EMAIndicator
 from ta.momentum import StochasticOscillator
 
 from datetime import datetime
@@ -24,42 +21,13 @@ st.set_page_config(
 )
 
 # =========================================================
-# PARÂMETROS FIXOS
+# PARÂMETROS
 # =========================================================
 
 GAIN_FIXO = 0.03
 LOSS_FIXO = 0.03
 
-ADX_MINIMO = 17
-
-# =========================================================
-# CSS
-# =========================================================
-
-st.markdown("""
-<style>
-
-.main {
-    background-color: #0E1117;
-}
-
-section[data-testid="stSidebar"] {
-    background-color: #111827;
-}
-
-h1, h2, h3 {
-    color: white;
-}
-
-div[data-testid="stMetric"] {
-    background-color: #161B22;
-    border: 1px solid #2A2F3A;
-    border-radius: 12px;
-    padding: 15px;
-}
-
-</style>
-""", unsafe_allow_html=True)
+ADX_MINIMO = 20
 
 # =========================================================
 # ATIVOS
@@ -86,13 +54,6 @@ ATIVOS = [
     "SMAL11.SA",
     "HASH11.SA",
 
-    # FIIs
-
-    "HGLG11.SA",
-    "MXRF11.SA",
-    "KNRI11.SA",
-    "AUVP11.SA",
-
     # BDRs
 
     "AAPL34.SA",
@@ -102,7 +63,7 @@ ATIVOS = [
 ]
 
 # =========================================================
-# DOWNLOAD DADOS
+# DOWNLOAD
 # =========================================================
 
 @st.cache_data(ttl=3600)
@@ -168,7 +129,18 @@ def calcular_indicadores(df):
     df = df.copy()
 
     # =====================================================
-    # ESTOCÁSTICO 14-3-3
+    # EMA21
+    # =====================================================
+
+    ema21 = EMAIndicator(
+        close=df["Close"],
+        window=21
+    )
+
+    df["EMA21"] = ema21.ema_indicator()
+
+    # =====================================================
+    # ESTOCÁSTICO
     # =====================================================
 
     estocastico = StochasticOscillator(
@@ -188,7 +160,7 @@ def calcular_indicadores(df):
     )
 
     # =====================================================
-    # DMI / ADX
+    # ADX / DMI
     # =====================================================
 
     adx = ADXIndicator(
@@ -203,16 +175,6 @@ def calcular_indicadores(df):
     df["DI_POS"] = adx.adx_pos()
 
     df["DI_NEG"] = adx.adx_neg()
-
-    # =====================================================
-    # LIMPEZA
-    # =====================================================
-
-    df.replace(
-        [np.inf, -np.inf],
-        np.nan,
-        inplace=True
-    )
 
     df.dropna(inplace=True)
 
@@ -244,28 +206,24 @@ def calcular_expectancia(winrate):
     )
 
 # =========================================================
-# PROBABILIDADE HISTÓRICA
+# BACKTEST HISTÓRICO
 # =========================================================
 
-def calcular_probabilidade_historica(
+def calcular_probabilidade(
     diario,
     semanal
 ):
-
-    total_sinais = 0
-
-    gains = 0
-
-    losses = 0
 
     semanal["SEM_K_MAIOR"] = (
         semanal["K"] >
         semanal["D"]
     )
 
-    # =====================================================
-    # LOOP HISTÓRICO
-    # =====================================================
+    total = 0
+
+    gains = 0
+
+    losses = 0
 
     for i in range(30, len(diario) - 30):
 
@@ -304,6 +262,11 @@ def calcular_probabilidade_historica(
 
                 and
 
+                candle["Close"] >
+                candle["EMA21"]
+
+                and
+
                 semana["SEM_K_MAIOR"]
 
             )
@@ -311,13 +274,11 @@ def calcular_probabilidade_historica(
             if not filtro:
                 continue
 
-            total_sinais += 1
-
             # =================================================
-            # ENTRADA
+            # GATILHO
             # =================================================
 
-            entrada = candle["Close"]
+            entrada = candle["High"]
 
             gain = (
                 entrada *
@@ -329,9 +290,7 @@ def calcular_probabilidade_historica(
                 (1 - LOSS_FIXO)
             )
 
-            # =================================================
-            # FUTURO
-            # =================================================
+            total += 1
 
             futuro = diario.iloc[
                 i + 1:i + 31
@@ -341,11 +300,26 @@ def calcular_probabilidade_historica(
 
             for _, prox in futuro.iterrows():
 
+                # =============================================
+                # ENTRADA ACIONADA?
+                # =============================================
+
+                if prox["High"] < entrada:
+                    continue
+
+                # =============================================
+                # GAIN
+                # =============================================
+
                 if prox["High"] >= gain:
 
                     resultado = "GAIN"
 
                     break
+
+                # =============================================
+                # LOSS
+                # =============================================
 
                 if prox["Low"] <= loss:
 
@@ -362,27 +336,23 @@ def calcular_probabilidade_historica(
         except:
             continue
 
-    # =====================================================
-    # RESULTADO
-    # =====================================================
-
-    if total_sinais == 0:
+    if total == 0:
 
         return {
 
-            "probabilidade": 0,
+            "winrate": 0,
 
             "expectancia": 0,
 
-            "sinais": 0,
-
             "gains": 0,
 
-            "losses": 0
+            "losses": 0,
+
+            "sinais": 0
         }
 
     winrate = round(
-        (gains / total_sinais) * 100,
+        (gains / total) * 100,
         1
     )
 
@@ -392,76 +362,55 @@ def calcular_probabilidade_historica(
 
     return {
 
-        "probabilidade": winrate,
+        "winrate": winrate,
 
         "expectancia": expectancia,
 
-        "sinais": total_sinais,
-
         "gains": gains,
 
-        "losses": losses
+        "losses": losses,
+
+        "sinais": total
     }
 
 # =========================================================
-# EXECUTAR SCANNER
+# SCANNER
 # =========================================================
 
 def executar_scanner():
 
-    resultados = []
+    aprovados = []
 
     reprovados = []
 
-    progresso = st.progress(0)
+    barra = st.progress(0)
 
-    total = len(ATIVOS)
+    total_ativos = len(ATIVOS)
 
     for i, ativo in enumerate(ATIVOS):
 
-        progresso.progress(
-            (i + 1) / total
+        barra.progress(
+            (i + 1) / total_ativos
         )
 
         try:
-
-            # =================================================
-            # DIÁRIO
-            # =================================================
 
             diario = baixar_dados(
                 ativo,
                 intervalo="1d"
             )
 
-            if diario is None:
-                continue
-
-            diario = calcular_indicadores(diario)
-
-            if diario.empty:
-                continue
-
-            # =================================================
-            # SEMANAL
-            # =================================================
-
             semanal = baixar_dados(
                 ativo,
                 intervalo="1wk"
             )
 
-            if semanal is None:
+            if diario is None or semanal is None:
                 continue
+
+            diario = calcular_indicadores(diario)
 
             semanal = calcular_indicadores(semanal)
-
-            if semanal.empty:
-                continue
-
-            # =================================================
-            # CANDLE FECHADO
-            # =================================================
 
             d = diario.iloc[-2]
 
@@ -471,151 +420,92 @@ def executar_scanner():
             # FILTROS
             # =================================================
 
-            filtro_estoc_diario = (
+            filtros = (
+
                 d["K"] > d["D"]
-            )
 
-            filtro_dmi = (
+                and
+
                 d["DI_POS"] > d["DI_NEG"]
-            )
 
-            filtro_adx = (
+                and
+
                 d["ADX"] > ADX_MINIMO
-            )
 
-            filtro_estoc_semanal = (
+                and
+
+                d["Close"] > d["EMA21"]
+
+                and
+
                 s["K"] > s["D"]
+
             )
 
-            if not (
-
-                filtro_estoc_diario
-
-                and
-
-                filtro_dmi
-
-                and
-
-                filtro_adx
-
-                and
-
-                filtro_estoc_semanal
-
-            ):
-
-                motivos = []
-
-                if not filtro_estoc_diario:
-                    motivos.append(
-                        "K diário abaixo D"
-                    )
-
-                if not filtro_dmi:
-                    motivos.append(
-                        "DI+ abaixo DI-"
-                    )
-
-                if not filtro_adx:
-                    motivos.append(
-                        f"ADX abaixo {ADX_MINIMO}"
-                    )
-
-                if not filtro_estoc_semanal:
-                    motivos.append(
-                        "K semanal abaixo D"
-                    )
+            if not filtros:
 
                 reprovados.append({
 
                     "Ativo": ativo,
 
-                    "Motivos": ", ".join(
-                        motivos
-                    )
+                    "Status": "Reprovado"
                 })
 
                 continue
 
-            # =================================================
-            # ESTATÍSTICA
-            # =================================================
-
-            estatistica = (
-                calcular_probabilidade_historica(
-                    diario,
-                    semanal
-                )
+            estatistica = calcular_probabilidade(
+                diario,
+                semanal
             )
 
-            # =================================================
-            # PREÇOS
-            # =================================================
-
             entrada = round(
-                float(d["Close"]),
+                float(d["High"]),
                 2
             )
 
-            gain_preco = round(
+            gain = round(
                 entrada *
                 (1 + GAIN_FIXO),
                 2
             )
 
-            loss_preco = round(
+            loss = round(
                 entrada *
                 (1 - LOSS_FIXO),
                 2
             )
 
-            rr = round(
-                GAIN_FIXO / LOSS_FIXO,
-                2
-            )
-
-            resultados.append({
+            aprovados.append({
 
                 "Ativo": ativo,
 
                 "Entrada": entrada,
 
-                "Gain %": (
-                    f"{int(GAIN_FIXO * 100)}%"
-                ),
+                "Gain": gain,
 
-                "Gain Preço": gain_preco,
-
-                "Loss %": (
-                    f"{int(LOSS_FIXO * 100)}%"
-                ),
-
-                "Loss Preço": loss_preco,
+                "Loss": loss,
 
                 "Win Rate": (
-                    f"{estatistica['probabilidade']}%"
+                    f"{estatistica['winrate']}%"
                 ),
 
                 "Expectância": (
                     estatistica["expectancia"]
                 ),
 
-                "R/R": rr,
-
                 "ADX": round(
                     float(d["ADX"]),
                     1
                 ),
 
-                "DI+": round(
-                    float(d["DI_POS"]),
-                    1
+                "EMA21": round(
+                    float(d["EMA21"]),
+                    2
                 ),
 
-                "DI-": round(
-                    float(d["DI_NEG"]),
-                    1
+                "Fechamento": round(
+                    float(d["Close"]),
+                    2
                 ),
 
                 "%K Diário": round(
@@ -655,18 +545,12 @@ def executar_scanner():
                 )
             })
 
-        except Exception as erro:
+        except:
+            continue
 
-            reprovados.append({
+    barra.empty()
 
-                "Ativo": ativo,
-
-                "Motivos": str(erro)
-            })
-
-    progresso.empty()
-
-    aprovados = pd.DataFrame(resultados)
+    aprovados = pd.DataFrame(aprovados)
 
     reprovados = pd.DataFrame(reprovados)
 
@@ -680,33 +564,6 @@ def executar_scanner():
     return aprovados, reprovados
 
 # =========================================================
-# SIDEBAR
-# =========================================================
-
-st.sidebar.title(
-    "📈 Scanner Quantitativo"
-)
-
-st.sidebar.markdown(
-    f"""
-### Setup
-
-✔ Estocástico Diário  
-✔ DMI Diário  
-✔ ADX > {ADX_MINIMO}  
-✔ Estocástico Semanal  
-
-### Gestão
-
-🎯 Gain:
-{int(GAIN_FIXO * 100)}%
-
-🛑 Loss:
-{int(LOSS_FIXO * 100)}%
-"""
-)
-
-# =========================================================
 # HEADER
 # =========================================================
 
@@ -714,18 +571,15 @@ st.title(
     "📈 Scanner Quantitativo"
 )
 
-st.markdown(
-    """
-Scanner baseado em:
-
-- Estocástico 14-3-3
-- DMI
-- ADX
-- Confirmação semanal
-- Candle fechado
-- Estatística histórica
-"""
-)
+st.markdown("""
+Setup:
+- Estocástico diário
+- DMI diário
+- ADX > 20
+- Fechamento acima EMA21
+- Estocástico semanal
+- Entrada acima da máxima
+""")
 
 st.markdown("---")
 
@@ -737,7 +591,9 @@ if st.button("▶ Executar Scanner"):
 
     aprovados, reprovados = executar_scanner()
 
-    st.subheader("✅ Ativos Aprovados")
+    st.subheader(
+        "✅ Ativos Aprovados"
+    )
 
     if aprovados.empty:
 
@@ -747,52 +603,12 @@ if st.button("▶ Executar Scanner"):
 
     else:
 
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-
-            st.metric(
-                "Ativos",
-                len(aprovados)
-            )
-
-        with col2:
-
-            st.metric(
-                "Win Rate Médio",
-                f"{round(aprovados['Expectância'].mean(),4)}"
-            )
-
-        with col3:
-
-            st.metric(
-                "ADX Médio",
-                round(
-                    aprovados["ADX"].mean(),
-                    1
-                )
-            )
-
-        with col4:
-
-            st.metric(
-                "Expectância Média",
-                round(
-                    aprovados["Expectância"].mean(),
-                    4
-                )
-            )
-
         st.dataframe(
-
             aprovados.drop(
                 columns=["Score"]
             ),
-
             use_container_width=True,
-
             hide_index=True,
-
             height=700
         )
 
@@ -806,12 +622,9 @@ if st.button("▶ Executar Scanner"):
 
             size="Sinais",
 
-            color="R/R",
-
             hover_data=["Ativo"],
 
             title="Mapa Quantitativo"
-
         )
 
         fig.update_layout(
@@ -827,18 +640,14 @@ if st.button("▶ Executar Scanner"):
     st.markdown("---")
 
     st.subheader(
-        "❌ Ativos Reprovados"
+        "❌ Reprovados"
     )
 
     st.dataframe(
-
         reprovados,
-
         use_container_width=True,
-
         hide_index=True,
-
-        height=450
+        height=350
     )
 
 # =========================================================
