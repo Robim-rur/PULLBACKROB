@@ -15,7 +15,7 @@ from datetime import datetime
 # =========================================================
 
 st.set_page_config(
-    page_title="Scanner Quantitativo Swing Trade",
+    page_title="Scanner Quantitativo Profissional",
     page_icon="📈",
     layout="wide"
 )
@@ -55,9 +55,7 @@ div[data-testid="stMetric"] {
 
 ATIVOS = [
 
-    # =====================================================
     # AÇÕES
-    # =====================================================
 
     "PETR4.SA",
     "VALE3.SA",
@@ -69,27 +67,21 @@ ATIVOS = [
     "BBDC4.SA",
     "GGBR4.SA",
 
-    # =====================================================
     # ETFs
-    # =====================================================
 
     "BOVA11.SA",
     "IVVB11.SA",
     "SMAL11.SA",
     "HASH11.SA",
 
-    # =====================================================
     # FIIs
-    # =====================================================
 
     "HGLG11.SA",
     "MXRF11.SA",
     "KNRI11.SA",
     "AUVP11.SA",
 
-    # =====================================================
     # BDRs
-    # =====================================================
 
     "AAPL34.SA",
     "GOGL34.SA",
@@ -98,11 +90,11 @@ ATIVOS = [
 ]
 
 # =========================================================
-# DOWNLOAD DOS DADOS
+# DOWNLOAD
 # =========================================================
 
 @st.cache_data(ttl=3600)
-def baixar_dados(ativo, periodo="2y", intervalo="1d"):
+def baixar_dados(ativo, periodo="5y", intervalo="1d"):
 
     try:
 
@@ -118,16 +110,8 @@ def baixar_dados(ativo, periodo="2y", intervalo="1d"):
         if df.empty:
             return None
 
-        # =====================================================
-        # REMOVE MULTIINDEX
-        # =====================================================
-
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
-
-        # =====================================================
-        # CONVERTE NUMÉRICO
-        # =====================================================
 
         colunas = [
             "Open",
@@ -146,19 +130,12 @@ def baixar_dados(ativo, periodo="2y", intervalo="1d"):
 
         df.dropna(inplace=True)
 
-        # =====================================================
-        # GARANTE DADOS SUFICIENTES
-        # =====================================================
-
-        if len(df) < 50:
+        if len(df) < 100:
             return None
 
         return df
 
-    except Exception as erro:
-
-        print(f"Erro download {ativo}: {erro}")
-
+    except:
         return None
 
 # =========================================================
@@ -170,7 +147,7 @@ def calcular_indicadores(df):
     df = df.copy()
 
     # =====================================================
-    # ESTOCÁSTICO 14-3-3
+    # ESTOCÁSTICO
     # =====================================================
 
     estocastico = StochasticOscillator(
@@ -219,85 +196,185 @@ def calcular_indicadores(df):
 
     df["ATR"] = atr.average_true_range()
 
-    # =====================================================
-    # REMOVE NAN
-    # =====================================================
-
-    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df.replace(
+        [np.inf, -np.inf],
+        np.nan,
+        inplace=True
+    )
 
     df.dropna(inplace=True)
 
     return df
 
 # =========================================================
-# SCORE
+# PROBABILIDADE HISTÓRICA
 # =========================================================
 
-def calcular_score(
-    adx,
-    di_pos,
-    di_neg,
-    k_diario,
-    d_diario,
-    k_semanal,
-    d_semanal
+def calcular_probabilidade_historica(
+    diario,
+    semanal
 ):
 
-    score = 50
+    total_sinais = 0
+
+    gains = 0
+
+    losses = 0
 
     # =====================================================
-    # ADX
+    # MAPEAMENTO SEMANAL
     # =====================================================
 
-    if adx > 18:
-        score += 10
+    semanal_filtrado = semanal.copy()
 
-    if adx > 22:
-        score += 10
-
-    if adx > 30:
-        score += 10
+    semanal_filtrado["SEM_K_MAIOR"] = (
+        semanal_filtrado["K"] >
+        semanal_filtrado["D"]
+    )
 
     # =====================================================
-    # FORÇA DMI
+    # LOOP HISTÓRICO
     # =====================================================
 
-    diferenca_di = di_pos - di_neg
+    for i in range(30, len(diario) - 10):
 
-    if diferenca_di > 2:
-        score += 5
+        try:
 
-    if diferenca_di > 5:
-        score += 5
+            candle = diario.iloc[i]
 
-    if diferenca_di > 10:
-        score += 10
+            data_candle = diario.index[i]
+
+            # =============================================
+            # LOCALIZA SEMANA CORRESPONDENTE
+            # =============================================
+
+            semana = semanal_filtrado[
+                semanal_filtrado.index <= data_candle
+            ]
+
+            if semana.empty:
+                continue
+
+            semana = semana.iloc[-1]
+
+            # =============================================
+            # FILTROS
+            # =============================================
+
+            filtro_diario = (
+
+                candle["K"] > candle["D"]
+
+                and
+
+                candle["DI_POS"] >
+                candle["DI_NEG"]
+
+                and
+
+                candle["ADX"] > 18
+
+            )
+
+            filtro_semanal = (
+                semana["SEM_K_MAIOR"]
+            )
+
+            if not (
+                filtro_diario
+                and filtro_semanal
+            ):
+                continue
+
+            total_sinais += 1
+
+            # =============================================
+            # ENTRADA
+            # =============================================
+
+            entrada = candle["Close"]
+
+            atr = candle["ATR"]
+
+            gain = entrada + (atr * 3)
+
+            loss = entrada - (atr * 1.5)
+
+            # =============================================
+            # FUTURO
+            # =============================================
+
+            futuro = diario.iloc[i + 1:i + 11]
+
+            resultado = None
+
+            for _, prox in futuro.iterrows():
+
+                maximo = prox["High"]
+
+                minimo = prox["Low"]
+
+                # =========================================
+                # GAIN PRIMEIRO
+                # =========================================
+
+                if maximo >= gain:
+
+                    resultado = "GAIN"
+
+                    break
+
+                # =========================================
+                # LOSS PRIMEIRO
+                # =========================================
+
+                if minimo <= loss:
+
+                    resultado = "LOSS"
+
+                    break
+
+            # =============================================
+            # RESULTADO
+            # =============================================
+
+            if resultado == "GAIN":
+                gains += 1
+
+            elif resultado == "LOSS":
+                losses += 1
+
+        except:
+            continue
 
     # =====================================================
-    # ESTOCÁSTICO DIÁRIO
+    # ESTATÍSTICAS
     # =====================================================
 
-    diferenca_diario = k_diario - d_diario
+    if total_sinais == 0:
 
-    if diferenca_diario > 1:
-        score += 5
+        return {
+            "probabilidade": 0,
+            "sinais": 0,
+            "gains": 0,
+            "losses": 0
+        }
 
-    if diferenca_diario > 3:
-        score += 5
+    probabilidade = round(
+        (gains / total_sinais) * 100,
+        1
+    )
 
-    # =====================================================
-    # ESTOCÁSTICO SEMANAL
-    # =====================================================
+    return {
 
-    diferenca_semanal = k_semanal - d_semanal
+        "probabilidade": probabilidade,
 
-    if diferenca_semanal > 1:
-        score += 5
+        "sinais": total_sinais,
 
-    if diferenca_semanal > 3:
-        score += 5
+        "gains": gains,
 
-    return min(round(score), 100)
+        "losses": losses
+    }
 
 # =========================================================
 # EXECUTAR SCANNER
@@ -380,7 +457,7 @@ def executar_scanner():
             )
 
             # =================================================
-            # TODOS OS FILTROS
+            # FILTROS FINAIS
             # =================================================
 
             if (
@@ -389,6 +466,15 @@ def executar_scanner():
                 and filtro_adx
                 and filtro_estoc_semanal
             ):
+
+                # =============================================
+                # PROBABILIDADE HISTÓRICA
+                # =============================================
+
+                estatistica = calcular_probabilidade_historica(
+                    diario,
+                    semanal
+                )
 
                 entrada = round(
                     float(d["Close"]),
@@ -400,23 +486,15 @@ def executar_scanner():
                     2
                 )
 
-                # =============================================
-                # GAIN E LOSS ATR
-                # =============================================
-
-                loss = round(
-                    entrada - (atr * 1.5),
-                    2
-                )
-
                 gain = round(
                     entrada + (atr * 3),
                     2
                 )
 
-                # =============================================
-                # RISCO RETORNO
-                # =============================================
+                loss = round(
+                    entrada - (atr * 1.5),
+                    2
+                )
 
                 risco = entrada - loss
 
@@ -425,20 +503,6 @@ def executar_scanner():
                 rr = round(
                     retorno / risco,
                     2
-                )
-
-                # =============================================
-                # SCORE
-                # =============================================
-
-                score = calcular_score(
-                    d["ADX"],
-                    d["DI_POS"],
-                    d["DI_NEG"],
-                    d["K"],
-                    d["D"],
-                    s["K"],
-                    s["D"]
                 )
 
                 resultados.append({
@@ -451,7 +515,7 @@ def executar_scanner():
 
                     "Loss": loss,
 
-                    "ATR": atr,
+                    "ATR14": atr,
 
                     "ADX": round(
                         float(d["ADX"]),
@@ -490,14 +554,32 @@ def executar_scanner():
 
                     "R/R": rr,
 
-                    "Probabilidade": f"{score}%",
+                    "Probabilidade": (
+                        f"{estatistica['probabilidade']}%"
+                    ),
 
-                    "Score": score
+                    "Sinais Históricos": (
+                        estatistica["sinais"]
+                    ),
+
+                    "Gains": (
+                        estatistica["gains"]
+                    ),
+
+                    "Losses": (
+                        estatistica["losses"]
+                    ),
+
+                    "Score": (
+                        estatistica["probabilidade"]
+                    )
                 })
 
         except Exception as erro:
 
-            print(f"Erro em {ativo}: {erro}")
+            print(
+                f"Erro em {ativo}: {erro}"
+            )
 
             continue
 
@@ -531,8 +613,9 @@ st.sidebar.markdown(
 ✔ DMI Diário  
 ✔ ADX > 18  
 ✔ Estocástico Semanal  
-✔ ATR para Gain/Loss  
-✔ Candle Fechado Confirmado
+✔ ATR14  
+✔ Probabilidade Histórica  
+✔ Candle Fechado  
 """
 )
 
@@ -541,26 +624,27 @@ st.sidebar.markdown(
 # =========================================================
 
 st.title(
-    "📈 Scanner Quantitativo Swing Trade"
+    "📈 Scanner Quantitativo Profissional"
 )
 
 st.markdown(
     """
-Scanner baseado em:
+Scanner quantitativo baseado em:
 
 - Estocástico 14-3-3
 - DMI
 - ADX
 - Confirmação semanal
-- ATR 14
-- Candle fechado confirmado
+- ATR14
+- Probabilidade histórica
+- Gain antes do Loss
 """
 )
 
 st.markdown("---")
 
 # =========================================================
-# EXECUTAR SCANNER
+# EXECUTAR
 # =========================================================
 
 if st.button("▶ Executar Scanner"):
@@ -589,29 +673,20 @@ if st.button("▶ Executar Scanner"):
 
         with col2:
             st.metric(
-                "Score Médio",
-                round(
-                    resultado["Score"].mean(),
-                    1
-                )
+                "Probabilidade Média",
+                f"{round(resultado['Score'].mean(), 1)}%"
             )
 
         with col3:
             st.metric(
                 "ADX Médio",
-                round(
-                    resultado["ADX"].mean(),
-                    1
-                )
+                round(resultado["ADX"].mean(), 1)
             )
 
         with col4:
             st.metric(
                 "R/R Médio",
-                round(
-                    resultado["R/R"].mean(),
-                    2
-                )
+                round(resultado["R/R"].mean(), 2)
             )
 
         st.markdown("---")
@@ -647,7 +722,7 @@ if st.button("▶ Executar Scanner"):
 
             y="Score",
 
-            size="ATR",
+            size="ATR14",
 
             color="R/R",
 
