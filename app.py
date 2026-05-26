@@ -67,7 +67,6 @@ ATIVOS = [
     "PRIO3.SA",
     "RENT3.SA",
     "BBDC4.SA",
-    "GGBR4.SA",
 
     # =====================================================
     # ETFs
@@ -102,22 +101,61 @@ ATIVOS = [
 # =========================================================
 
 @st.cache_data(ttl=3600)
-def baixar_dados(ativo, periodo="1y", intervalo="1d"):
+def baixar_dados(ativo, periodo="2y", intervalo="1d"):
 
-    df = yf.download(
-        ativo,
-        period=periodo,
-        interval=intervalo,
-        progress=False,
-        auto_adjust=True
-    )
+    try:
 
-    if df.empty:
+        df = yf.download(
+            ativo,
+            period=periodo,
+            interval=intervalo,
+            auto_adjust=True,
+            progress=False,
+            threads=False
+        )
+
+        if df.empty:
+            return None
+
+        # =====================================================
+        # REMOVE MULTIINDEX DO YFINANCE
+        # =====================================================
+
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        # =====================================================
+        # GARANTE NUMÉRICO
+        # =====================================================
+
+        colunas = [
+            "Open",
+            "High",
+            "Low",
+            "Close",
+            "Volume"
+        ]
+
+        for coluna in colunas:
+
+            df[coluna] = pd.to_numeric(
+                df[coluna],
+                errors="coerce"
+            )
+
+        df.dropna(inplace=True)
+
+        # =====================================================
+        # GARANTE MÍNIMO DE DADOS
+        # =====================================================
+
+        if len(df) < 50:
+            return None
+
+        return df
+
+    except:
         return None
-
-    df.dropna(inplace=True)
-
-    return df
 
 # =========================================================
 # INDICADORES
@@ -141,6 +179,10 @@ def calcular_indicadores(df):
 
     df["K"] = estocastico.stoch()
 
+    # =====================================================
+    # %D
+    # =====================================================
+
     df["D"] = (
         df["K"]
         .rolling(3)
@@ -160,9 +202,9 @@ def calcular_indicadores(df):
 
     df["ADX"] = adx.adx()
 
-    df["DI+"] = adx.adx_pos()
+    df["DI_POS"] = adx.adx_pos()
 
-    df["DI-"] = adx.adx_neg()
+    df["DI_NEG"] = adx.adx_neg()
 
     # =====================================================
     # ATR
@@ -177,6 +219,12 @@ def calcular_indicadores(df):
 
     df["ATR"] = atr.average_true_range()
 
+    # =====================================================
+    # REMOVE NAN
+    # =====================================================
+
+    df.dropna(inplace=True)
+
     return df
 
 # =========================================================
@@ -184,7 +232,6 @@ def calcular_indicadores(df):
 # =========================================================
 
 def calcular_score(
-
     adx,
     di_pos,
     di_neg,
@@ -192,64 +239,63 @@ def calcular_score(
     d_diario,
     k_semanal,
     d_semanal
-
 ):
 
-    score = 0
+    score = 50
 
     # =====================================================
     # ADX
     # =====================================================
 
     if adx > 18:
-        score += 20
+        score += 10
 
-    if adx > 25:
-        score += 15
+    if adx > 22:
+        score += 10
 
-    if adx > 35:
-        score += 15
+    if adx > 30:
+        score += 10
 
     # =====================================================
-    # FORÇA DIRECIONAL
+    # FORÇA DMI
     # =====================================================
 
     diferenca_di = di_pos - di_neg
 
+    if diferenca_di > 2:
+        score += 5
+
     if diferenca_di > 5:
-        score += 15
+        score += 5
 
     if diferenca_di > 10:
-        score += 10
-
-    if diferenca_di > 20:
         score += 10
 
     # =====================================================
     # ESTOCÁSTICO DIÁRIO
     # =====================================================
 
-    diferenca_estoc_diario = k_diario - d_diario
+    diferenca_diario = k_diario - d_diario
 
-    if diferenca_estoc_diario > 2:
+    if diferenca_diario > 1:
         score += 5
 
-    if diferenca_estoc_diario > 5:
+    if diferenca_diario > 3:
         score += 5
 
     # =====================================================
     # ESTOCÁSTICO SEMANAL
     # =====================================================
 
-    diferenca_estoc_semanal = k_semanal - d_semanal
+    diferenca_semanal = k_semanal - d_semanal
 
-    if diferenca_estoc_semanal > 2:
+    if diferenca_semanal > 1:
         score += 5
 
-    if diferenca_estoc_semanal > 5:
+    if diferenca_semanal > 3:
         score += 5
 
-    return min(score, 100)
+    return min(round(score), 100)
 
 # =========================================================
 # EXECUTAR SCANNER
@@ -265,12 +311,12 @@ def executar_scanner():
 
     for i, ativo in enumerate(ATIVOS):
 
+        progresso.progress((i + 1) / total)
+
         try:
 
-            progresso.progress((i + 1) / total)
-
             # =================================================
-            # DADOS DIÁRIOS
+            # DIÁRIO
             # =================================================
 
             diario = baixar_dados(
@@ -283,8 +329,11 @@ def executar_scanner():
 
             diario = calcular_indicadores(diario)
 
+            if diario.empty:
+                continue
+
             # =================================================
-            # DADOS SEMANAIS
+            # SEMANAL
             # =================================================
 
             semanal = baixar_dados(
@@ -297,8 +346,11 @@ def executar_scanner():
 
             semanal = calcular_indicadores(semanal)
 
+            if semanal.empty:
+                continue
+
             # =================================================
-            # ÚLTIMOS DADOS
+            # ÚLTIMAS LINHAS
             # =================================================
 
             d = diario.iloc[-1]
@@ -310,21 +362,15 @@ def executar_scanner():
             # =================================================
 
             filtro_estoc_diario = (
-
                 d["K"] > d["D"]
-
             )
 
             filtro_dmi = (
-
-                d["DI+"] > d["DI-"]
-
+                d["DI_POS"] > d["DI_NEG"]
             )
 
             filtro_adx = (
-
                 d["ADX"] > 18
-
             )
 
             # =================================================
@@ -332,22 +378,18 @@ def executar_scanner():
             # =================================================
 
             filtro_estoc_semanal = (
-
                 s["K"] > s["D"]
-
             )
 
             # =================================================
-            # TODOS OS FILTROS
+            # FILTROS FINAIS
             # =================================================
 
             if (
-
                 filtro_estoc_diario
                 and filtro_dmi
                 and filtro_adx
                 and filtro_estoc_semanal
-
             ):
 
                 entrada = round(
@@ -361,10 +403,10 @@ def executar_scanner():
                 )
 
                 # =============================================
-                # STOP E GAIN PELO ATR
+                # GAIN E LOSS ATR
                 # =============================================
 
-                stop = round(
+                loss = round(
                     entrada - (atr * 1.5),
                     2
                 )
@@ -378,15 +420,9 @@ def executar_scanner():
                 # RISCO RETORNO
                 # =============================================
 
-                risco = round(
-                    entrada - stop,
-                    2
-                )
+                risco = entrada - loss
 
-                retorno = round(
-                    gain - entrada,
-                    2
-                )
+                retorno = gain - entrada
 
                 rr = round(
                     retorno / risco,
@@ -398,18 +434,13 @@ def executar_scanner():
                 # =============================================
 
                 score = calcular_score(
-
                     d["ADX"],
-
-                    d["DI+"],
-                    d["DI-"],
-
+                    d["DI_POS"],
+                    d["DI_NEG"],
                     d["K"],
                     d["D"],
-
                     s["K"],
                     s["D"]
-
                 )
 
                 resultados.append({
@@ -420,7 +451,7 @@ def executar_scanner():
 
                     "Gain": gain,
 
-                    "Loss": stop,
+                    "Loss": loss,
 
                     "ATR": atr,
 
@@ -430,12 +461,12 @@ def executar_scanner():
                     ),
 
                     "DI+": round(
-                        float(d["DI+"]),
+                        float(d["DI_POS"]),
                         1
                     ),
 
                     "DI-": round(
-                        float(d["DI-"]),
+                        float(d["DI_NEG"]),
                         1
                     ),
 
@@ -466,13 +497,15 @@ def executar_scanner():
                     "Score": score
                 })
 
-        except:
-            pass
+        except Exception as erro:
+
+            print(f"Erro em {ativo}: {erro}")
+
+            continue
 
     progresso.empty()
 
     if len(resultados) == 0:
-
         return pd.DataFrame()
 
     resultado = pd.DataFrame(resultados)
@@ -494,13 +527,13 @@ st.sidebar.title(
 
 st.sidebar.markdown(
     """
-Setup operacional:
+### Filtros:
 
-✔ Estocástico Diário
-✔ DMI
-✔ ADX > 18
-✔ Estocástico Semanal
-✔ ATR para Gain/Loss
+✔ Estocástico Diário  
+✔ DMI Diário  
+✔ ADX > 18  
+✔ Estocástico Semanal  
+✔ Gain/Loss ATR  
 """
 )
 
@@ -514,13 +547,13 @@ st.title(
 
 st.markdown(
     """
-Scanner baseado em:
+Scanner quantitativo baseado em:
 
 - Estocástico 14-3-3
 - DMI
 - ADX
 - Confirmação semanal
-- ATR para targets
+- ATR 14
 """
 )
 
@@ -537,7 +570,7 @@ if st.button("▶ Executar Scanner"):
     if resultado.empty:
 
         st.warning(
-            "Nenhum ativo encontrado."
+            "Nenhum ativo passou pelos filtros hoje."
         )
 
     else:
@@ -549,14 +582,12 @@ if st.button("▶ Executar Scanner"):
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-
             st.metric(
                 "Ativos",
                 len(resultado)
             )
 
         with col2:
-
             st.metric(
                 "Score Médio",
                 round(
@@ -566,7 +597,6 @@ if st.button("▶ Executar Scanner"):
             )
 
         with col3:
-
             st.metric(
                 "ADX Médio",
                 round(
@@ -576,7 +606,6 @@ if st.button("▶ Executar Scanner"):
             )
 
         with col4:
-
             st.metric(
                 "R/R Médio",
                 round(
@@ -601,7 +630,7 @@ if st.button("▶ Executar Scanner"):
 
             hide_index=True,
 
-            height=700
+            height=750
         )
 
         st.markdown("---")
@@ -632,7 +661,7 @@ if st.button("▶ Executar Scanner"):
 
             template="plotly_dark",
 
-            height=650
+            height=700
 
         )
 
@@ -651,11 +680,8 @@ if st.button("▶ Executar Scanner"):
 st.markdown("---")
 
 st.caption(
-
     f"""
 Última atualização:
-
 {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 """
-
 )
