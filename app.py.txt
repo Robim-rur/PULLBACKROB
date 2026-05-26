@@ -1,0 +1,453 @@
+import streamlit as st
+import pandas as pd
+import sqlite3
+from datetime import datetime
+
+# ==========================================
+# CONFIGURAÇÃO DA PÁGINA
+# ==========================================
+
+st.set_page_config(
+    page_title="Swing Trade AUVP11",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ==========================================
+# CSS CUSTOMIZADO
+# ==========================================
+
+st.markdown("""
+<style>
+
+.main {
+    background-color: #0E1117;
+}
+
+.block-container {
+    padding-top: 1rem;
+}
+
+[data-testid="stMetric"] {
+    background-color: #161B22;
+    border: 1px solid #262730;
+    padding: 15px;
+    border-radius: 12px;
+}
+
+div[data-testid="stSidebar"] {
+    background-color: #111827;
+}
+
+h1, h2, h3 {
+    color: #FAFAFA;
+}
+
+table {
+    color: white;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# SIDEBAR
+# ==========================================
+
+st.sidebar.title("📊 Swing Trade AUVP11")
+
+st.sidebar.markdown("---")
+
+menu = st.sidebar.radio(
+    "Navegação",
+    [
+        "Dashboard",
+        "Scanner",
+        "Backtest",
+        "Configurações"
+    ]
+)
+
+st.sidebar.markdown("---")
+
+st.sidebar.info(
+    """
+Sistema focado em:
+
+✅ Swing Trade comprado  
+✅ Tendência forte  
+✅ Continuidade de alta  
+✅ Qualidade acima de quantidade  
+"""
+)
+
+# ==========================================
+# FUNÇÕES AUXILIARES
+# ==========================================
+
+DB_PATH = "data/historico.db"
+
+def conectar_db():
+    conn = sqlite3.connect(DB_PATH)
+    return conn
+
+def carregar_sinais():
+    """
+    Exemplo simplificado.
+    Depois será substituído pelos sinais reais.
+    """
+
+    dados = {
+        "Ativo": ["PETR4", "VALE3", "ITUB4", "WEGE3"],
+        "Setup": [
+            "Pullback EMA09",
+            "Rompimento",
+            "Pullback EMA29",
+            "IFR2"
+        ],
+        "Entrada": [38.20, 67.40, 31.10, 52.90],
+        "Alvo": [39.35, 69.42, 32.03, 54.48],
+        "Stop": [36.29, 64.03, 29.54, 50.25],
+        "Score": [92, 88, 85, 81],
+        "Tendência": ["Alta", "Alta", "Alta", "Alta"],
+        "Volume Relativo": [1.8, 2.1, 1.5, 1.3]
+    }
+
+    return pd.DataFrame(dados)
+
+def calcular_indice_mercado():
+    """
+    Índice fictício inicial.
+    Depois será calculado dinamicamente.
+    """
+
+    return 7.8
+
+# ==========================================
+# HEADER PRINCIPAL
+# ==========================================
+
+col1, col2 = st.columns([4, 1])
+
+with col1:
+    st.title("📈 Swing Trade Profissional — AUVP11")
+
+with col2:
+    st.metric(
+        "Mercado",
+        f"{calcular_indice_mercado():.1f}/10"
+    )
+
+st.markdown("---")
+
+# ==========================================
+# DASHBOARD
+# ==========================================
+
+if menu == "Dashboard":
+
+    st.subheader("📊 Dashboard Geral")
+
+    indice_mercado = calcular_indice_mercado()
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        st.metric(
+            "IBOV",
+            "Alta",
+            "+1.24%"
+        )
+
+    with col2:
+        st.metric(
+            "Índice Mercado",
+            f"{indice_mercado:.1f}/10"
+        )
+
+    with col3:
+        st.metric(
+            "Sinais Ativos",
+            "4"
+        )
+
+    with col4:
+        st.metric(
+            "Taxa de Acerto",
+            "71%"
+        )
+
+    with col5:
+        st.metric(
+            "Drawdown",
+            "-4.8%"
+        )
+
+    st.markdown("---")
+
+    st.subheader("🏆 Ranking das Melhores Oportunidades")
+
+    sinais = carregar_sinais()
+
+    sinais = sinais.sort_values(
+        by="Score",
+        ascending=False
+    )
+
+    st.dataframe(
+        sinais,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.markdown("---")
+
+    st.subheader("📌 Status do Mercado")
+
+    if indice_mercado >= 7:
+        st.success(
+            "Mercado favorável para operações compradas."
+        )
+
+    elif indice_mercado >= 5:
+        st.warning(
+            "Mercado neutro. Operar com seletividade."
+        )
+
+    else:
+        st.error(
+            "Mercado desfavorável. Evitar operações."
+        )
+
+# ==========================================
+# SCANNER
+# ==========================================
+
+elif menu == "Scanner":
+
+    st.subheader("🔎 Scanner de Oportunidades")
+
+    sinais = carregar_sinais()
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        score_min = st.slider(
+            "Score mínimo",
+            0,
+            100,
+            80
+        )
+
+    with col2:
+        setup = st.selectbox(
+            "Setup",
+            [
+                "Todos",
+                "Pullback EMA09",
+                "Pullback EMA29",
+                "Rompimento",
+                "IFR2"
+            ]
+        )
+
+    with col3:
+        tendencia = st.selectbox(
+            "Tendência",
+            [
+                "Todas",
+                "Alta"
+            ]
+        )
+
+    # ======================================
+    # FILTROS
+    # ======================================
+
+    sinais = sinais[
+        sinais["Score"] >= score_min
+    ]
+
+    if setup != "Todos":
+        sinais = sinais[
+            sinais["Setup"] == setup
+        ]
+
+    if tendencia != "Todas":
+        sinais = sinais[
+            sinais["Tendência"] == tendencia
+        ]
+
+    st.markdown("---")
+
+    st.dataframe(
+        sinais,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.markdown("---")
+
+    if st.button("🔄 Atualizar Scanner"):
+        st.success("Scanner atualizado com sucesso.")
+
+# ==========================================
+# BACKTEST
+# ==========================================
+
+elif menu == "Backtest":
+
+    st.subheader("📈 Backtest dos Setups")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        setup = st.selectbox(
+            "Setup",
+            [
+                "Pullback EMA09",
+                "Pullback EMA29",
+                "Rompimento",
+                "IFR2"
+            ]
+        )
+
+    with col2:
+        data_inicio = st.date_input(
+            "Data Inicial"
+        )
+
+    with col3:
+        data_final = st.date_input(
+            "Data Final"
+        )
+
+    st.markdown("---")
+
+    if st.button("▶ Rodar Backtest"):
+
+        st.success(
+            f"Backtest executado para setup: {setup}"
+        )
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "Win Rate",
+                "72%"
+            )
+
+        with col2:
+            st.metric(
+                "Payoff",
+                "1.43"
+            )
+
+        with col3:
+            st.metric(
+                "Lucro Acumulado",
+                "+28.4%"
+            )
+
+        with col4:
+            st.metric(
+                "Drawdown",
+                "-6.2%"
+            )
+
+        st.markdown("---")
+
+        resultado = pd.DataFrame({
+            "Métrica": [
+                "Trades",
+                "Vitórias",
+                "Derrotas",
+                "Taxa Acerto",
+                "Payoff",
+                "Lucro"
+            ],
+            "Resultado": [
+                84,
+                61,
+                23,
+                "72%",
+                1.43,
+                "+28.4%"
+            ]
+        })
+
+        st.dataframe(
+            resultado,
+            use_container_width=True,
+            hide_index=True
+        )
+
+# ==========================================
+# CONFIGURAÇÕES
+# ==========================================
+
+elif menu == "Configurações":
+
+    st.subheader("⚙️ Configurações")
+
+    st.markdown("### Parâmetros Operacionais")
+
+    gain = st.number_input(
+        "Take Profit (%)",
+        value=3.0
+    )
+
+    stop = st.number_input(
+        "Stop Loss (%)",
+        value=5.0
+    )
+
+    score = st.number_input(
+        "Score mínimo",
+        value=80
+    )
+
+    st.markdown("---")
+
+    st.markdown("### Estratégia")
+
+    st.checkbox(
+        "Ativar Pullback EMA09",
+        value=True
+    )
+
+    st.checkbox(
+        "Ativar Pullback EMA29",
+        value=True
+    )
+
+    st.checkbox(
+        "Ativar Rompimento",
+        value=True
+    )
+
+    st.checkbox(
+        "Ativar IFR2",
+        value=True
+    )
+
+    st.markdown("---")
+
+    if st.button("💾 Salvar Configurações"):
+        st.success("Configurações salvas com sucesso.")
+
+# ==========================================
+# FOOTER
+# ==========================================
+
+st.markdown("---")
+
+st.caption(
+    f"""
+Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+
+Sistema profissional de Swing Trade focado em continuidade de tendência.
+"""
+)
