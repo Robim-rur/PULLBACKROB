@@ -119,14 +119,14 @@ def baixar_dados(ativo, periodo="2y", intervalo="1d"):
             return None
 
         # =====================================================
-        # REMOVE MULTIINDEX DO YFINANCE
+        # REMOVE MULTIINDEX
         # =====================================================
 
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
         # =====================================================
-        # GARANTE NUMÉRICO
+        # CONVERTE NUMÉRICO
         # =====================================================
 
         colunas = [
@@ -147,7 +147,7 @@ def baixar_dados(ativo, periodo="2y", intervalo="1d"):
         df.dropna(inplace=True)
 
         # =====================================================
-        # GARANTE MÍNIMO DE DADOS
+        # GARANTE DADOS SUFICIENTES
         # =====================================================
 
         if len(df) < 50:
@@ -155,7 +155,10 @@ def baixar_dados(ativo, periodo="2y", intervalo="1d"):
 
         return df
 
-    except:
+    except Exception as erro:
+
+        print(f"Erro download {ativo}: {erro}")
+
         return None
 
 # =========================================================
@@ -179,10 +182,6 @@ def calcular_indicadores(df):
     )
 
     df["K"] = estocastico.stoch()
-
-    # =====================================================
-    # %D
-    # =====================================================
 
     df["D"] = (
         df["K"]
@@ -224,12 +223,14 @@ def calcular_indicadores(df):
     # REMOVE NAN
     # =====================================================
 
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+
     df.dropna(inplace=True)
 
     return df
 
 # =========================================================
-# SCORE ESTATÍSTICO
+# SCORE
 # =========================================================
 
 def calcular_score(
@@ -351,15 +352,15 @@ def executar_scanner():
                 continue
 
             # =================================================
-            # ÚLTIMAS LINHAS
+            # CANDLE FECHADO
             # =================================================
 
-            d = diario.iloc[-1]
+            d = diario.iloc[-2]
 
-            s = semanal.iloc[-1]
+            s = semanal.iloc[-2]
 
             # =================================================
-            # FILTROS DIÁRIOS
+            # FILTROS
             # =================================================
 
             filtro_estoc_diario = (
@@ -374,16 +375,12 @@ def executar_scanner():
                 d["ADX"] > 18
             )
 
-            # =================================================
-            # FILTRO SEMANAL
-            # =================================================
-
             filtro_estoc_semanal = (
                 s["K"] > s["D"]
             )
 
             # =================================================
-            # FILTROS FINAIS
+            # TODOS OS FILTROS
             # =================================================
 
             if (
@@ -528,13 +525,14 @@ st.sidebar.title(
 
 st.sidebar.markdown(
     """
-### Filtros:
+### Setup Operacional
 
 ✔ Estocástico Diário  
 ✔ DMI Diário  
 ✔ ADX > 18  
 ✔ Estocástico Semanal  
-✔ Gain/Loss ATR  
+✔ ATR para Gain/Loss  
+✔ Candle Fechado Confirmado
 """
 )
 
@@ -548,20 +546,21 @@ st.title(
 
 st.markdown(
     """
-Scanner quantitativo baseado em:
+Scanner baseado em:
 
 - Estocástico 14-3-3
 - DMI
 - ADX
 - Confirmação semanal
 - ATR 14
+- Candle fechado confirmado
 """
 )
 
 st.markdown("---")
 
 # =========================================================
-# EXECUTAR
+# EXECUTAR SCANNER
 # =========================================================
 
 if st.button("▶ Executar Scanner"):
@@ -571,7 +570,7 @@ if st.button("▶ Executar Scanner"):
     if resultado.empty:
 
         st.warning(
-            "Nenhum ativo passou pelos filtros hoje."
+            "Nenhum ativo passou pelos filtros."
         )
 
     else:
