@@ -108,7 +108,7 @@ if "backtest_resultado" not in st.session_state:
 
 ATIVOS = [
 
-     # =====================================================
+    # =====================================================
     # AÇÕES
     # =====================================================
 
@@ -258,7 +258,7 @@ ATIVOS = [
 ]
 
 # =========================================================
-# GERAR DADOS
+# GERAR DADOS COM ATR
 # =========================================================
 
 def gerar_dados():
@@ -279,13 +279,26 @@ def gerar_dados():
             2
         )
 
-        alvo = round(
-            entrada * np.random.uniform(1.03, 1.12),
+        # =====================================================
+        # ATR SIMULADO
+        # =====================================================
+
+        atr = round(
+            entrada * np.random.uniform(0.015, 0.06),
             2
         )
 
+        # =====================================================
+        # STOP E ALVO BASEADOS NO ATR
+        # =====================================================
+
         stop = round(
-            entrada * np.random.uniform(0.92, 0.97),
+            entrada - (atr * 1.5),
+            2
+        )
+
+        alvo = round(
+            entrada + (atr * 3),
             2
         )
 
@@ -296,6 +309,8 @@ def gerar_dados():
             "Setup": np.random.choice(setups),
 
             "Entrada": entrada,
+
+            "ATR": atr,
 
             "Alvo": alvo,
 
@@ -408,11 +423,8 @@ if menu == "Dashboard":
 
     with col4:
         st.metric(
-            "Volume Médio",
-            round(
-                df_base["Volume Relativo"].mean(),
-                2
-            )
+            "ATR Médio",
+            round(df_base["ATR"].mean(), 2)
         )
 
     st.markdown("---")
@@ -548,7 +560,7 @@ elif menu == "Scanner":
             x="ADX",
             y="Score",
             color="Setup",
-            size="Volume Relativo",
+            size="ATR",
             hover_data=["Ativo"],
             title="Força Relativa"
         )
@@ -597,10 +609,6 @@ elif menu == "Backtest":
     st.markdown("---")
 
     if st.button("▶ Rodar Backtest"):
-
-        # =====================================================
-        # RESULTADOS DIFERENTES POR SETUP
-        # =====================================================
 
         parametros = {
 
@@ -689,10 +697,6 @@ elif menu == "Backtest":
             "drawdown": drawdown,
             "historico": historico
         }
-
-    # =====================================================
-    # EXIBIÇÃO
-    # =====================================================
 
     if st.session_state.backtest_resultado is not None:
 
