@@ -10,7 +10,7 @@ from ta.momentum import StochasticOscillator
 from datetime import datetime
 
 # =========================================================
-# CONFIGURAÇÃO
+# CONFIGURAÇÃO DA PÁGINA
 # =========================================================
 
 st.set_page_config(
@@ -23,12 +23,10 @@ st.set_page_config(
 # PARÂMETROS
 # =========================================================
 
-GAIN_PERCENTUAL = 0.07
+GAIN_PERCENTUAL = 0.06
 LOSS_PERCENTUAL = 0.05
 
 ADX_MINIMO = 17
-
-LOOKBACK_CRUZAMENTO = 3
 
 # =========================================================
 # CSS
@@ -65,6 +63,8 @@ div[data-testid="stMetric"] {
 
 ATIVOS = [
 
+    # AÇÕES
+
     "PETR4.SA",
     "VALE3.SA",
     "BBAS3.SA",
@@ -75,15 +75,21 @@ ATIVOS = [
     "BBDC4.SA",
     "GGBR4.SA",
 
+    # ETFs
+
     "BOVA11.SA",
     "IVVB11.SA",
     "SMAL11.SA",
     "HASH11.SA",
 
+    # FIIs
+
     "HGLG11.SA",
     "MXRF11.SA",
     "KNRI11.SA",
     "AUVP11.SA",
+
+    # BDRs
 
     "AAPL34.SA",
     "GOGL34.SA",
@@ -116,12 +122,20 @@ def baixar_dados(
         if df.empty:
             return None
 
+        # =================================================
+        # REMOVE MULTIINDEX
+        # =================================================
+
         if isinstance(df.columns, pd.MultiIndex):
 
             df.columns = (
                 df.columns
                 .get_level_values(0)
             )
+
+        # =================================================
+        # CONVERTE NUMÉRICO
+        # =================================================
 
         colunas = [
             "Open",
@@ -158,7 +172,7 @@ def calcular_indicadores(df):
     df = df.copy()
 
     # =====================================================
-    # ESTOCÁSTICO
+    # ESTOCÁSTICO 14-3-3
     # =====================================================
 
     estocastico = StochasticOscillator(
@@ -209,35 +223,6 @@ def calcular_indicadores(df):
     return df
 
 # =========================================================
-# CRUZAMENTO RECENTE
-# =========================================================
-
-def cruzamento_recente(df):
-
-    ultimos = df.tail(LOOKBACK_CRUZAMENTO + 1)
-
-    for i in range(1, len(ultimos)):
-
-        anterior = ultimos.iloc[i - 1]
-
-        atual = ultimos.iloc[i]
-
-        cruzou = (
-
-            anterior["K"] <= anterior["D"]
-
-            and
-
-            atual["K"] > atual["D"]
-
-        )
-
-        if cruzou:
-            return True
-
-    return False
-
-# =========================================================
 # PROBABILIDADE HISTÓRICA
 # =========================================================
 
@@ -257,6 +242,10 @@ def calcular_probabilidade_historica(
         semanal["D"]
     )
 
+    # =====================================================
+    # LOOP HISTÓRICO
+    # =====================================================
+
     for i in range(30, len(diario) - 30):
 
         try:
@@ -264,6 +253,10 @@ def calcular_probabilidade_historica(
             candle = diario.iloc[i]
 
             data_candle = diario.index[i]
+
+            # =================================================
+            # LOCALIZA SEMANA
+            # =================================================
 
             semana = semanal[
                 semanal.index <= data_candle
@@ -273,6 +266,10 @@ def calcular_probabilidade_historica(
                 continue
 
             semana = semana.iloc[-1]
+
+            # =================================================
+            # FILTROS
+            # =================================================
 
             filtro_diario = (
 
@@ -302,6 +299,10 @@ def calcular_probabilidade_historica(
 
             total_sinais += 1
 
+            # =================================================
+            # ENTRADA
+            # =================================================
+
             entrada = candle["Close"]
 
             gain = (
@@ -313,6 +314,10 @@ def calcular_probabilidade_historica(
                 entrada *
                 (1 - LOSS_PERCENTUAL)
             )
+
+            # =================================================
+            # JANELA FUTURA
+            # =================================================
 
             futuro = diario.iloc[
                 i + 1:i + 31
@@ -326,17 +331,29 @@ def calcular_probabilidade_historica(
 
                 minimo = prox["Low"]
 
+                # =============================================
+                # GAIN PRIMEIRO
+                # =============================================
+
                 if maximo >= gain:
 
                     resultado = "GAIN"
 
                     break
 
+                # =============================================
+                # LOSS PRIMEIRO
+                # =============================================
+
                 if minimo <= loss:
 
                     resultado = "LOSS"
 
                     break
+
+            # =================================================
+            # RESULTADO
+            # =================================================
 
             if resultado == "GAIN":
                 gains += 1
@@ -347,12 +364,20 @@ def calcular_probabilidade_historica(
         except:
             continue
 
+    # =====================================================
+    # ESTATÍSTICA
+    # =====================================================
+
     if total_sinais == 0:
 
         return {
+
             "probabilidade": 0,
+
             "sinais": 0,
+
             "gains": 0,
+
             "losses": 0
         }
 
@@ -378,7 +403,7 @@ def calcular_probabilidade_historica(
 
 def executar_scanner():
 
-    aprovados = []
+    resultados = []
 
     reprovados = []
 
@@ -456,12 +481,8 @@ def executar_scanner():
                 s["K"] > s["D"]
             )
 
-            filtro_cruzamento = (
-                cruzamento_recente(diario)
-            )
-
             # =================================================
-            # MOTIVOS
+            # REPROVAÇÕES
             # =================================================
 
             motivos = []
@@ -486,13 +507,8 @@ def executar_scanner():
                     "K semanal abaixo D"
                 )
 
-            if not filtro_cruzamento:
-                motivos.append(
-                    "Sem cruzamento recente"
-                )
-
             # =================================================
-            # APROVADO
+            # APROVAÇÃO
             # =================================================
 
             if (
@@ -503,8 +519,6 @@ def executar_scanner():
                 filtro_adx
                 and
                 filtro_estoc_semanal
-                and
-                filtro_cruzamento
             ):
 
                 estatistica = (
@@ -540,7 +554,7 @@ def executar_scanner():
                     2
                 )
 
-                aprovados.append({
+                resultados.append({
 
                     "Ativo": ativo,
 
@@ -632,7 +646,7 @@ def executar_scanner():
 
     progresso.empty()
 
-    aprovados_df = pd.DataFrame(aprovados)
+    aprovados_df = pd.DataFrame(resultados)
 
     reprovados_df = pd.DataFrame(reprovados)
 
@@ -664,7 +678,6 @@ st.sidebar.markdown(
 ✔ DMI Diário  
 ✔ ADX > {ADX_MINIMO}  
 ✔ Estocástico Semanal  
-✔ Cruzamento Recente  
 
 ### Gestão
 
@@ -689,8 +702,8 @@ Scanner quantitativo baseado em:
 - DMI
 - ADX
 - Confirmação semanal
-- Cruzamento recente
 - Probabilidade histórica
+- Candle fechado confirmado
 """
 )
 
@@ -766,6 +779,10 @@ if st.button("▶ Executar Scanner"):
 
             height=700
         )
+
+        # =================================================
+        # GRÁFICO
+        # =================================================
 
         fig = px.scatter(
 
