@@ -10,7 +10,7 @@ from ta.momentum import StochasticOscillator
 from datetime import datetime
 
 # =========================================================
-# CONFIGURAÇÃO DA PÁGINA
+# CONFIGURAÇÃO
 # =========================================================
 
 st.set_page_config(
@@ -20,11 +20,15 @@ st.set_page_config(
 )
 
 # =========================================================
-# CONFIGURAÇÕES OPERACIONAIS
+# PARÂMETROS
 # =========================================================
 
 GAIN_PERCENTUAL = 0.07
 LOSS_PERCENTUAL = 0.05
+
+ADX_MINIMO = 17
+
+LOOKBACK_CRUZAMENTO = 3
 
 # =========================================================
 # CSS
@@ -56,14 +60,10 @@ div[data-testid="stMetric"] {
 """, unsafe_allow_html=True)
 
 # =========================================================
-# LISTA DE ATIVOS
+# ATIVOS
 # =========================================================
 
 ATIVOS = [
-
-    # =====================================================
-    # AÇÕES
-    # =====================================================
 
     "PETR4.SA",
     "VALE3.SA",
@@ -75,27 +75,15 @@ ATIVOS = [
     "BBDC4.SA",
     "GGBR4.SA",
 
-    # =====================================================
-    # ETFs
-    # =====================================================
-
     "BOVA11.SA",
     "IVVB11.SA",
     "SMAL11.SA",
     "HASH11.SA",
 
-    # =====================================================
-    # FIIs
-    # =====================================================
-
     "HGLG11.SA",
     "MXRF11.SA",
     "KNRI11.SA",
     "AUVP11.SA",
-
-    # =====================================================
-    # BDRs
-    # =====================================================
 
     "AAPL34.SA",
     "GOGL34.SA",
@@ -104,7 +92,7 @@ ATIVOS = [
 ]
 
 # =========================================================
-# DOWNLOAD DOS DADOS
+# DOWNLOAD
 # =========================================================
 
 @st.cache_data(ttl=3600)
@@ -128,20 +116,12 @@ def baixar_dados(
         if df.empty:
             return None
 
-        # =================================================
-        # REMOVE MULTIINDEX
-        # =================================================
-
         if isinstance(df.columns, pd.MultiIndex):
 
             df.columns = (
                 df.columns
                 .get_level_values(0)
             )
-
-        # =================================================
-        # CONVERTE NUMÉRICO
-        # =================================================
 
         colunas = [
             "Open",
@@ -165,9 +145,7 @@ def baixar_dados(
 
         return df
 
-    except Exception as erro:
-
-        print(f"Erro em {ativo}: {erro}")
+    except:
 
         return None
 
@@ -180,7 +158,7 @@ def calcular_indicadores(df):
     df = df.copy()
 
     # =====================================================
-    # ESTOCÁSTICO 14-3-3
+    # ESTOCÁSTICO
     # =====================================================
 
     estocastico = StochasticOscillator(
@@ -231,6 +209,35 @@ def calcular_indicadores(df):
     return df
 
 # =========================================================
+# CRUZAMENTO RECENTE
+# =========================================================
+
+def cruzamento_recente(df):
+
+    ultimos = df.tail(LOOKBACK_CRUZAMENTO + 1)
+
+    for i in range(1, len(ultimos)):
+
+        anterior = ultimos.iloc[i - 1]
+
+        atual = ultimos.iloc[i]
+
+        cruzou = (
+
+            anterior["K"] <= anterior["D"]
+
+            and
+
+            atual["K"] > atual["D"]
+
+        )
+
+        if cruzou:
+            return True
+
+    return False
+
+# =========================================================
 # PROBABILIDADE HISTÓRICA
 # =========================================================
 
@@ -250,10 +257,6 @@ def calcular_probabilidade_historica(
         semanal["D"]
     )
 
-    # =====================================================
-    # LOOP HISTÓRICO
-    # =====================================================
-
     for i in range(30, len(diario) - 30):
 
         try:
@@ -261,10 +264,6 @@ def calcular_probabilidade_historica(
             candle = diario.iloc[i]
 
             data_candle = diario.index[i]
-
-            # =================================================
-            # ENCONTRA SEMANA CORRESPONDENTE
-            # =================================================
 
             semana = semanal[
                 semanal.index <= data_candle
@@ -274,10 +273,6 @@ def calcular_probabilidade_historica(
                 continue
 
             semana = semana.iloc[-1]
-
-            # =================================================
-            # FILTROS
-            # =================================================
 
             filtro_diario = (
 
@@ -291,7 +286,7 @@ def calcular_probabilidade_historica(
 
                 and
 
-                candle["ADX"] > 18
+                candle["ADX"] > ADX_MINIMO
 
             )
 
@@ -307,10 +302,6 @@ def calcular_probabilidade_historica(
 
             total_sinais += 1
 
-            # =================================================
-            # ENTRADA
-            # =================================================
-
             entrada = candle["Close"]
 
             gain = (
@@ -322,10 +313,6 @@ def calcular_probabilidade_historica(
                 entrada *
                 (1 - LOSS_PERCENTUAL)
             )
-
-            # =================================================
-            # FUTURO
-            # =================================================
 
             futuro = diario.iloc[
                 i + 1:i + 31
@@ -339,29 +326,17 @@ def calcular_probabilidade_historica(
 
                 minimo = prox["Low"]
 
-                # =============================================
-                # GAIN PRIMEIRO
-                # =============================================
-
                 if maximo >= gain:
 
                     resultado = "GAIN"
 
                     break
 
-                # =============================================
-                # LOSS PRIMEIRO
-                # =============================================
-
                 if minimo <= loss:
 
                     resultado = "LOSS"
 
                     break
-
-            # =================================================
-            # RESULTADO
-            # =================================================
 
             if resultado == "GAIN":
                 gains += 1
@@ -372,20 +347,12 @@ def calcular_probabilidade_historica(
         except:
             continue
 
-    # =====================================================
-    # ESTATÍSTICAS
-    # =====================================================
-
     if total_sinais == 0:
 
         return {
-
             "probabilidade": 0,
-
             "sinais": 0,
-
             "gains": 0,
-
             "losses": 0
         }
 
@@ -411,7 +378,9 @@ def calcular_probabilidade_historica(
 
 def executar_scanner():
 
-    resultados = []
+    aprovados = []
+
+    reprovados = []
 
     progresso = st.progress(0)
 
@@ -480,27 +449,63 @@ def executar_scanner():
             )
 
             filtro_adx = (
-                d["ADX"] > 18
+                d["ADX"] > ADX_MINIMO
             )
 
             filtro_estoc_semanal = (
                 s["K"] > s["D"]
             )
 
+            filtro_cruzamento = (
+                cruzamento_recente(diario)
+            )
+
             # =================================================
-            # TODOS OS FILTROS
+            # MOTIVOS
+            # =================================================
+
+            motivos = []
+
+            if not filtro_estoc_diario:
+                motivos.append(
+                    "K diário abaixo D"
+                )
+
+            if not filtro_dmi:
+                motivos.append(
+                    "DI+ abaixo DI-"
+                )
+
+            if not filtro_adx:
+                motivos.append(
+                    f"ADX abaixo {ADX_MINIMO}"
+                )
+
+            if not filtro_estoc_semanal:
+                motivos.append(
+                    "K semanal abaixo D"
+                )
+
+            if not filtro_cruzamento:
+                motivos.append(
+                    "Sem cruzamento recente"
+                )
+
+            # =================================================
+            # APROVADO
             # =================================================
 
             if (
                 filtro_estoc_diario
-                and filtro_dmi
-                and filtro_adx
-                and filtro_estoc_semanal
+                and
+                filtro_dmi
+                and
+                filtro_adx
+                and
+                filtro_estoc_semanal
+                and
+                filtro_cruzamento
             ):
-
-                # =============================================
-                # ESTATÍSTICA HISTÓRICA
-                # =============================================
 
                 estatistica = (
                     calcular_probabilidade_historica(
@@ -535,7 +540,7 @@ def executar_scanner():
                     2
                 )
 
-                resultados.append({
+                aprovados.append({
 
                     "Ativo": ativo,
 
@@ -603,27 +608,45 @@ def executar_scanner():
                     )
                 })
 
+            else:
+
+                reprovados.append({
+
+                    "Ativo": ativo,
+
+                    "Motivos": ", ".join(
+                        motivos
+                    )
+                })
+
         except Exception as erro:
 
-            print(
-                f"Erro em {ativo}: {erro}"
-            )
+            reprovados.append({
+
+                "Ativo": ativo,
+
+                "Motivos": str(erro)
+            })
 
             continue
 
     progresso.empty()
 
-    if len(resultados) == 0:
-        return pd.DataFrame()
+    aprovados_df = pd.DataFrame(aprovados)
 
-    resultado = pd.DataFrame(resultados)
+    reprovados_df = pd.DataFrame(reprovados)
 
-    resultado = resultado.sort_values(
-        by="Score",
-        ascending=False
-    )
+    if not aprovados_df.empty:
 
-    return resultado
+        aprovados_df = (
+            aprovados_df
+            .sort_values(
+                by="Score",
+                ascending=False
+            )
+        )
+
+    return aprovados_df, reprovados_df
 
 # =========================================================
 # SIDEBAR
@@ -639,9 +662,9 @@ st.sidebar.markdown(
 
 ✔ Estocástico Diário  
 ✔ DMI Diário  
-✔ ADX > 18  
+✔ ADX > {ADX_MINIMO}  
 ✔ Estocástico Semanal  
-✔ Candle Fechado  
+✔ Cruzamento Recente  
 
 ### Gestão
 
@@ -666,33 +689,34 @@ Scanner quantitativo baseado em:
 - DMI
 - ADX
 - Confirmação semanal
+- Cruzamento recente
 - Probabilidade histórica
-- Gain antes do Loss
-- Candle fechado confirmado
 """
 )
 
 st.markdown("---")
 
 # =========================================================
-# EXECUTAR SCANNER
+# EXECUTAR
 # =========================================================
 
 if st.button("▶ Executar Scanner"):
 
-    resultado = executar_scanner()
+    aprovados, reprovados = executar_scanner()
 
-    if resultado.empty:
+    # =====================================================
+    # APROVADOS
+    # =====================================================
+
+    st.subheader("✅ Ativos Aprovados")
+
+    if aprovados.empty:
 
         st.warning(
-            "Nenhum ativo passou pelos filtros."
+            "Nenhum ativo passou."
         )
 
     else:
-
-        # =================================================
-        # MÉTRICAS
-        # =================================================
 
         col1, col2, col3, col4 = st.columns(4)
 
@@ -700,14 +724,14 @@ if st.button("▶ Executar Scanner"):
 
             st.metric(
                 "Ativos",
-                len(resultado)
+                len(aprovados)
             )
 
         with col2:
 
             st.metric(
                 "Probabilidade Média",
-                f"{round(resultado['Score'].mean(), 1)}%"
+                f"{round(aprovados['Score'].mean(),1)}%"
             )
 
         with col3:
@@ -715,7 +739,7 @@ if st.button("▶ Executar Scanner"):
             st.metric(
                 "ADX Médio",
                 round(
-                    resultado["ADX"].mean(),
+                    aprovados["ADX"].mean(),
                     1
                 )
             )
@@ -725,20 +749,14 @@ if st.button("▶ Executar Scanner"):
             st.metric(
                 "R/R Médio",
                 round(
-                    resultado["R/R"].mean(),
+                    aprovados["R/R"].mean(),
                     2
                 )
             )
 
-        st.markdown("---")
-
-        # =================================================
-        # TABELA
-        # =================================================
-
         st.dataframe(
 
-            resultado.drop(
+            aprovados.drop(
                 columns=["Score"]
             ),
 
@@ -746,18 +764,12 @@ if st.button("▶ Executar Scanner"):
 
             hide_index=True,
 
-            height=750
+            height=700
         )
-
-        st.markdown("---")
-
-        # =================================================
-        # GRÁFICO
-        # =================================================
 
         fig = px.scatter(
 
-            resultado,
+            aprovados,
 
             x="ADX",
 
@@ -774,20 +786,35 @@ if st.button("▶ Executar Scanner"):
         )
 
         fig.update_layout(
-
             template="plotly_dark",
-
             height=700
-
         )
 
         st.plotly_chart(
-
             fig,
-
             use_container_width=True
-
         )
+
+    # =====================================================
+    # REPROVADOS
+    # =====================================================
+
+    st.markdown("---")
+
+    st.subheader(
+        "❌ Ativos Reprovados"
+    )
+
+    st.dataframe(
+
+        reprovados,
+
+        use_container_width=True,
+
+        hide_index=True,
+
+        height=500
+    )
 
 # =========================================================
 # FOOTER
