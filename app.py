@@ -1,3 +1,7 @@
+# =========================================================
+# APP.PY
+# =========================================================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -10,30 +14,21 @@ from ta.momentum import StochasticOscillator
 from datetime import datetime
 
 # =========================================================
-# CONFIGURAÇÃO DA PÁGINA
+# CONFIGURAÇÃO
 # =========================================================
 
 st.set_page_config(
-    page_title="Scanner Quantitativo Inteligente",
+    page_title="Scanner Quantitativo",
     page_icon="📈",
     layout="wide"
 )
 
 # =========================================================
-# PARÂMETROS
+# PARÂMETROS FIXOS
 # =========================================================
 
+GAIN_FIXO = 0.03
 LOSS_FIXO = 0.05
-
-GAINS_TESTADOS = [
-    0.055,
-    0.06,
-    0.065,
-    0.07,
-    0.08,
-    0.09,
-    0.10
-]
 
 ADX_MINIMO = 17
 
@@ -67,10 +62,12 @@ div[data-testid="stMetric"] {
 """, unsafe_allow_html=True)
 
 # =========================================================
-# LISTA DE ATIVOS
+# ATIVOS
 # =========================================================
 
 ATIVOS = [
+
+    # AÇÕES
 
     "PETR4.SA",
     "VALE3.SA",
@@ -82,15 +79,21 @@ ATIVOS = [
     "BBDC4.SA",
     "GGBR4.SA",
 
+    # ETFs
+
     "BOVA11.SA",
     "IVVB11.SA",
     "SMAL11.SA",
     "HASH11.SA",
 
+    # FIIs
+
     "HGLG11.SA",
     "MXRF11.SA",
     "KNRI11.SA",
     "AUVP11.SA",
+
+    # BDRs
 
     "AAPL34.SA",
     "GOGL34.SA",
@@ -99,7 +102,7 @@ ATIVOS = [
 ]
 
 # =========================================================
-# DOWNLOAD
+# DOWNLOAD DADOS
 # =========================================================
 
 @st.cache_data(ttl=3600)
@@ -165,7 +168,7 @@ def calcular_indicadores(df):
     df = df.copy()
 
     # =====================================================
-    # ESTOCÁSTICO
+    # ESTOCÁSTICO 14-3-3
     # =====================================================
 
     estocastico = StochasticOscillator(
@@ -219,20 +222,20 @@ def calcular_indicadores(df):
 # EXPECTÂNCIA
 # =========================================================
 
-def calcular_expectancia(
-    winrate,
-    gain,
-    loss
-):
+def calcular_expectancia(winrate):
 
     pw = winrate / 100
 
     pl = 1 - pw
 
     expectativa = (
-        (pw * gain)
+
+        (pw * GAIN_FIXO)
+
         -
-        (pl * loss)
+
+        (pl * LOSS_FIXO)
+
     )
 
     return round(
@@ -241,179 +244,164 @@ def calcular_expectancia(
     )
 
 # =========================================================
-# OTIMIZADOR
+# PROBABILIDADE HISTÓRICA
 # =========================================================
 
-def otimizar_gain(
+def calcular_probabilidade_historica(
     diario,
     semanal
 ):
 
-    melhor_resultado = None
+    total_sinais = 0
+
+    gains = 0
+
+    losses = 0
 
     semanal["SEM_K_MAIOR"] = (
         semanal["K"] >
         semanal["D"]
     )
 
-    for gain_testado in GAINS_TESTADOS:
+    # =====================================================
+    # LOOP HISTÓRICO
+    # =====================================================
 
-        total_sinais = 0
+    for i in range(30, len(diario) - 30):
 
-        gains = 0
+        try:
 
-        losses = 0
+            candle = diario.iloc[i]
 
-        # =================================================
-        # LOOP HISTÓRICO
-        # =================================================
+            data_candle = diario.index[i]
 
-        for i in range(30, len(diario) - 30):
+            semana = semanal[
+                semanal.index <= data_candle
+            ]
 
-            try:
-
-                candle = diario.iloc[i]
-
-                data_candle = diario.index[i]
-
-                semana = semanal[
-                    semanal.index <= data_candle
-                ]
-
-                if semana.empty:
-                    continue
-
-                semana = semana.iloc[-1]
-
-                # =============================================
-                # FILTROS
-                # =============================================
-
-                filtro = (
-
-                    candle["K"] >
-                    candle["D"]
-
-                    and
-
-                    candle["DI_POS"] >
-                    candle["DI_NEG"]
-
-                    and
-
-                    candle["ADX"] > ADX_MINIMO
-
-                    and
-
-                    semana["SEM_K_MAIOR"]
-
-                )
-
-                if not filtro:
-                    continue
-
-                total_sinais += 1
-
-                entrada = candle["Close"]
-
-                gain = (
-                    entrada *
-                    (1 + gain_testado)
-                )
-
-                loss = (
-                    entrada *
-                    (1 - LOSS_FIXO)
-                )
-
-                futuro = diario.iloc[
-                    i + 1:i + 31
-                ]
-
-                resultado = None
-
-                for _, prox in futuro.iterrows():
-
-                    if prox["High"] >= gain:
-
-                        resultado = "GAIN"
-
-                        break
-
-                    if prox["Low"] <= loss:
-
-                        resultado = "LOSS"
-
-                        break
-
-                if resultado == "GAIN":
-                    gains += 1
-
-                elif resultado == "LOSS":
-                    losses += 1
-
-            except:
+            if semana.empty:
                 continue
 
-        # =================================================
-        # ESTATÍSTICAS
-        # =================================================
+            semana = semana.iloc[-1]
 
-        if total_sinais == 0:
+            # =================================================
+            # FILTROS
+            # =================================================
+
+            filtro = (
+
+                candle["K"] >
+                candle["D"]
+
+                and
+
+                candle["DI_POS"] >
+                candle["DI_NEG"]
+
+                and
+
+                candle["ADX"] > ADX_MINIMO
+
+                and
+
+                semana["SEM_K_MAIOR"]
+
+            )
+
+            if not filtro:
+                continue
+
+            total_sinais += 1
+
+            # =================================================
+            # ENTRADA
+            # =================================================
+
+            entrada = candle["Close"]
+
+            gain = (
+                entrada *
+                (1 + GAIN_FIXO)
+            )
+
+            loss = (
+                entrada *
+                (1 - LOSS_FIXO)
+            )
+
+            # =================================================
+            # FUTURO
+            # =================================================
+
+            futuro = diario.iloc[
+                i + 1:i + 31
+            ]
+
+            resultado = None
+
+            for _, prox in futuro.iterrows():
+
+                if prox["High"] >= gain:
+
+                    resultado = "GAIN"
+
+                    break
+
+                if prox["Low"] <= loss:
+
+                    resultado = "LOSS"
+
+                    break
+
+            if resultado == "GAIN":
+                gains += 1
+
+            elif resultado == "LOSS":
+                losses += 1
+
+        except:
             continue
 
-        winrate = (
-            gains / total_sinais
-        ) * 100
+    # =====================================================
+    # RESULTADO
+    # =====================================================
 
-        expectativa = calcular_expectancia(
-            winrate,
-            gain_testado,
-            LOSS_FIXO
-        )
+    if total_sinais == 0:
 
-        # =================================================
-        # SCORE FINAL
-        # =================================================
+        return {
 
-        score = (
-            expectativa * 100
-        )
+            "probabilidade": 0,
 
-        # =================================================
-        # MELHOR RESULTADO
-        # =================================================
+            "expectancia": 0,
 
-        if (
-            melhor_resultado is None
-            or
-            score > melhor_resultado["score"]
-        ):
+            "sinais": 0,
 
-            melhor_resultado = {
+            "gains": 0,
 
-                "gain": gain_testado,
+            "losses": 0
+        }
 
-                "winrate": round(
-                    winrate,
-                    1
-                ),
+    winrate = round(
+        (gains / total_sinais) * 100,
+        1
+    )
 
-                "expectativa": expectativa,
+    expectancia = calcular_expectancia(
+        winrate
+    )
 
-                "score": round(
-                    score,
-                    2
-                ),
+    return {
 
-                "sinais": total_sinais,
+        "probabilidade": winrate,
 
-                "gains": gains,
+        "expectancia": expectancia,
 
-                "losses": losses
-            }
+        "sinais": total_sinais,
 
-    return melhor_resultado
+        "gains": gains,
+
+        "losses": losses
+    }
 
 # =========================================================
 # EXECUTAR SCANNER
@@ -551,16 +539,15 @@ def executar_scanner():
                 continue
 
             # =================================================
-            # OTIMIZAÇÃO
+            # ESTATÍSTICA
             # =================================================
 
-            melhor = otimizar_gain(
-                diario,
-                semanal
+            estatistica = (
+                calcular_probabilidade_historica(
+                    diario,
+                    semanal
+                )
             )
-
-            if melhor is None:
-                continue
 
             # =================================================
             # PREÇOS
@@ -573,7 +560,7 @@ def executar_scanner():
 
             gain_preco = round(
                 entrada *
-                (1 + melhor["gain"]),
+                (1 + GAIN_FIXO),
                 2
             )
 
@@ -584,7 +571,7 @@ def executar_scanner():
             )
 
             rr = round(
-                melhor["gain"] / LOSS_FIXO,
+                GAIN_FIXO / LOSS_FIXO,
                 2
             )
 
@@ -595,7 +582,7 @@ def executar_scanner():
                 "Entrada": entrada,
 
                 "Gain %": (
-                    f"{round(melhor['gain'] * 100,1)}%"
+                    f"{int(GAIN_FIXO * 100)}%"
                 ),
 
                 "Gain Preço": gain_preco,
@@ -607,17 +594,27 @@ def executar_scanner():
                 "Loss Preço": loss_preco,
 
                 "Win Rate": (
-                    f"{melhor['winrate']}%"
+                    f"{estatistica['probabilidade']}%"
                 ),
 
                 "Expectância": (
-                    melhor["expectativa"]
+                    estatistica["expectancia"]
                 ),
 
                 "R/R": rr,
 
                 "ADX": round(
                     float(d["ADX"]),
+                    1
+                ),
+
+                "DI+": round(
+                    float(d["DI_POS"]),
+                    1
+                ),
+
+                "DI-": round(
+                    float(d["DI_NEG"]),
                     1
                 ),
 
@@ -642,19 +639,19 @@ def executar_scanner():
                 ),
 
                 "Sinais": (
-                    melhor["sinais"]
+                    estatistica["sinais"]
                 ),
 
                 "Gains": (
-                    melhor["gains"]
+                    estatistica["gains"]
                 ),
 
                 "Losses": (
-                    melhor["losses"]
+                    estatistica["losses"]
                 ),
 
                 "Score": (
-                    melhor["score"]
+                    estatistica["expectancia"]
                 )
             })
 
@@ -701,11 +698,11 @@ st.sidebar.markdown(
 
 ### Gestão
 
-🛑 Loss Fixo:
-{int(LOSS_FIXO * 100)}%
+🎯 Gain:
+{int(GAIN_FIXO * 100)}%
 
-🎯 Gain Dinâmico:
-otimizado automaticamente
+🛑 Loss:
+{int(LOSS_FIXO * 100)}%
 """
 )
 
@@ -714,18 +711,19 @@ otimizado automaticamente
 # =========================================================
 
 st.title(
-    "📈 Scanner Quantitativo Inteligente"
+    "📈 Scanner Quantitativo"
 )
 
 st.markdown(
     """
-O sistema procura:
+Scanner baseado em:
 
-- melhor gain histórico;
-- maior probabilidade;
-- maior expectância;
-- melhor equilíbrio matemático;
-- gain atingido antes do stop.
+- Estocástico 14-3-3
+- DMI
+- ADX
+- Confirmação semanal
+- Candle fechado
+- Estatística histórica
 """
 )
 
@@ -766,7 +764,7 @@ if st.button("▶ Executar Scanner"):
 
             st.metric(
                 "Win Rate Médio",
-                f"{round(aprovados['Score'].mean(),1)}"
+                f"{round(aprovados['Score'].mean(),4)}"
             )
 
         with col3:
@@ -785,7 +783,7 @@ if st.button("▶ Executar Scanner"):
                 "Expectância Média",
                 round(
                     aprovados["Expectância"].mean(),
-                    3
+                    4
                 )
             )
 
