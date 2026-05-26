@@ -28,8 +28,8 @@ st.set_page_config(
 # PARÂMETROS
 # =========================================================
 
-GAIN_FIXO = 0.05
-LOSS_FIXO = 0.06
+GAIN_FIXO = 0.02
+LOSS_FIXO = 0.02
 
 ADX_MINIMO = 20
 
