@@ -1,3 +1,7 @@
+# =========================================================
+# APP.PY
+# =========================================================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -200,9 +204,13 @@ def calcular_expectancia(winrate):
 
     )
 
+    # =====================================================
+    # CONVERTE PARA %
+    # =====================================================
+
     return round(
-        expectativa,
-        4
+        expectativa * 100,
+        2
     )
 
 # =========================================================
@@ -490,7 +498,7 @@ def executar_scanner():
                 ),
 
                 "Expectância": (
-                    estatistica["expectancia"]
+                    f"{estatistica['expectancia']}%"
                 ),
 
                 "ADX": round(
@@ -618,7 +626,7 @@ if st.button("▶ Executar Scanner"):
 
             x="ADX",
 
-            y="Expectância",
+            y="Score",
 
             size="Sinais",
 
