@@ -4,10 +4,9 @@ import numpy as np
 import yfinance as yf
 import plotly.express as px
 
-from ta.trend import EMAIndicator
 from ta.trend import ADXIndicator
 from ta.volatility import AverageTrueRange
-from ta.momentum import RSIIndicator
+from ta.momentum import StochasticOscillator
 
 from datetime import datetime
 
@@ -16,7 +15,7 @@ from datetime import datetime
 # =========================================================
 
 st.set_page_config(
-    page_title="Swing Trade Real",
+    page_title="Scanner Quantitativo Swing Trade",
     page_icon="📈",
     layout="wide"
 )
@@ -56,7 +55,9 @@ div[data-testid="stMetric"] {
 
 ATIVOS = [
 
+    # =====================================================
     # AÇÕES
+    # =====================================================
 
     "PETR4.SA",
     "VALE3.SA",
@@ -67,21 +68,27 @@ ATIVOS = [
     "RENT3.SA",
     "BBDC4.SA",
 
+    # =====================================================
     # ETFs
+    # =====================================================
 
     "BOVA11.SA",
     "IVVB11.SA",
     "SMAL11.SA",
     "HASH11.SA",
 
+    # =====================================================
     # FIIs
+    # =====================================================
 
     "HGLG11.SA",
     "MXRF11.SA",
     "KNRI11.SA",
     "AUVP11.SA",
 
+    # =====================================================
     # BDRs
+    # =====================================================
 
     "AAPL34.SA",
     "GOGL34.SA",
@@ -90,16 +97,16 @@ ATIVOS = [
 ]
 
 # =========================================================
-# CACHE
+# DOWNLOAD DOS DADOS
 # =========================================================
 
-@st.cache_data(ttl=1800)
-def baixar_dados(ativo):
+@st.cache_data(ttl=3600)
+def baixar_dados(ativo, periodo="1y", intervalo="1d"):
 
     df = yf.download(
         ativo,
-        period="1y",
-        interval="1d",
+        period=periodo,
+        interval=intervalo,
         progress=False,
         auto_adjust=True
     )
@@ -119,44 +126,29 @@ def calcular_indicadores(df):
 
     df = df.copy()
 
-    # EMA 9
+    # =====================================================
+    # ESTOCÁSTICO 14-3-3
+    # =====================================================
 
-    df["EMA9"] = EMAIndicator(
-        close=df["Close"],
-        window=9
-    ).ema_indicator()
-
-    # EMA 21
-
-    df["EMA21"] = EMAIndicator(
-        close=df["Close"],
-        window=21
-    ).ema_indicator()
-
-    # EMA 50
-
-    df["EMA50"] = EMAIndicator(
-        close=df["Close"],
-        window=50
-    ).ema_indicator()
-
-    # RSI
-
-    df["RSI"] = RSIIndicator(
-        close=df["Close"],
-        window=14
-    ).rsi()
-
-    # ATR
-
-    df["ATR"] = AverageTrueRange(
+    estocastico = StochasticOscillator(
         high=df["High"],
         low=df["Low"],
         close=df["Close"],
-        window=14
-    ).average_true_range()
+        window=14,
+        smooth_window=3
+    )
 
-    # ADX
+    df["K"] = estocastico.stoch()
+
+    df["D"] = (
+        df["K"]
+        .rolling(3)
+        .mean()
+    )
+
+    # =====================================================
+    # DMI / ADX
+    # =====================================================
 
     adx = ADXIndicator(
         high=df["High"],
@@ -167,20 +159,99 @@ def calcular_indicadores(df):
 
     df["ADX"] = adx.adx()
 
-    # Volume médio
+    df["DI+"] = adx.adx_pos()
 
-    df["VOL_MEDIA"] = df["Volume"].rolling(20).mean()
+    df["DI-"] = adx.adx_neg()
 
-    # Volume relativo
+    # =====================================================
+    # ATR
+    # =====================================================
 
-    df["VOL_REL"] = (
-        df["Volume"] / df["VOL_MEDIA"]
+    atr = AverageTrueRange(
+        high=df["High"],
+        low=df["Low"],
+        close=df["Close"],
+        window=14
     )
+
+    df["ATR"] = atr.average_true_range()
 
     return df
 
 # =========================================================
-# SCANNER
+# SCORE ESTATÍSTICO
+# =========================================================
+
+def calcular_score(
+
+    adx,
+    di_pos,
+    di_neg,
+    k_diario,
+    d_diario,
+    k_semanal,
+    d_semanal
+
+):
+
+    score = 0
+
+    # =====================================================
+    # ADX
+    # =====================================================
+
+    if adx > 18:
+        score += 20
+
+    if adx > 25:
+        score += 15
+
+    if adx > 35:
+        score += 15
+
+    # =====================================================
+    # FORÇA DIRECIONAL
+    # =====================================================
+
+    diferenca_di = di_pos - di_neg
+
+    if diferenca_di > 5:
+        score += 15
+
+    if diferenca_di > 10:
+        score += 10
+
+    if diferenca_di > 20:
+        score += 10
+
+    # =====================================================
+    # ESTOCÁSTICO DIÁRIO
+    # =====================================================
+
+    diferenca_estoc_diario = k_diario - d_diario
+
+    if diferenca_estoc_diario > 2:
+        score += 5
+
+    if diferenca_estoc_diario > 5:
+        score += 5
+
+    # =====================================================
+    # ESTOCÁSTICO SEMANAL
+    # =====================================================
+
+    diferenca_estoc_semanal = k_semanal - d_semanal
+
+    if diferenca_estoc_semanal > 2:
+        score += 5
+
+    if diferenca_estoc_semanal > 5:
+        score += 5
+
+    return min(score, 100)
+
+# =========================================================
+# EXECUTAR SCANNER
 # =========================================================
 
 def executar_scanner():
@@ -197,101 +268,199 @@ def executar_scanner():
 
             progresso.progress((i + 1) / total)
 
-            df = baixar_dados(ativo)
+            # =================================================
+            # DADOS DIÁRIOS
+            # =================================================
 
-            if df is None:
+            diario = baixar_dados(
+                ativo,
+                intervalo="1d"
+            )
+
+            if diario is None:
                 continue
 
-            df = calcular_indicadores(df)
-
-            ultimo = df.iloc[-1]
-
-            setup = None
+            diario = calcular_indicadores(diario)
 
             # =================================================
-            # PULLBACK EMA9
+            # DADOS SEMANAIS
+            # =================================================
+
+            semanal = baixar_dados(
+                ativo,
+                intervalo="1wk"
+            )
+
+            if semanal is None:
+                continue
+
+            semanal = calcular_indicadores(semanal)
+
+            # =================================================
+            # ÚLTIMOS DADOS
+            # =================================================
+
+            d = diario.iloc[-1]
+
+            s = semanal.iloc[-1]
+
+            # =================================================
+            # FILTROS DIÁRIOS
+            # =================================================
+
+            filtro_estoc_diario = (
+
+                d["K"] > d["D"]
+
+            )
+
+            filtro_dmi = (
+
+                d["DI+"] > d["DI-"]
+
+            )
+
+            filtro_adx = (
+
+                d["ADX"] > 18
+
+            )
+
+            # =================================================
+            # FILTRO SEMANAL
+            # =================================================
+
+            filtro_estoc_semanal = (
+
+                s["K"] > s["D"]
+
+            )
+
+            # =================================================
+            # TODOS OS FILTROS
             # =================================================
 
             if (
-                ultimo["Close"] > ultimo["EMA21"]
-                and ultimo["Close"] > ultimo["EMA50"]
-                and ultimo["ADX"] > 20
-                and ultimo["RSI"] > 50
+
+                filtro_estoc_diario
+                and filtro_dmi
+                and filtro_adx
+                and filtro_estoc_semanal
+
             ):
 
-                setup = "Pullback EMA9"
+                entrada = round(
+                    float(d["Close"]),
+                    2
+                )
 
-            # =================================================
-            # ROMPIMENTO
-            # =================================================
+                atr = round(
+                    float(d["ATR"]),
+                    2
+                )
 
-            max_20 = df["High"].rolling(20).max().iloc[-2]
-
-            if (
-                ultimo["Close"] > max_20
-                and ultimo["VOL_REL"] > 1.5
-            ):
-
-                setup = "Rompimento"
-
-            # =================================================
-            # IFR2
-            # =================================================
-
-            if ultimo["RSI"] < 25:
-
-                setup = "IFR2"
-
-            # =================================================
-            # GERAR OPERAÇÃO
-            # =================================================
-
-            if setup:
-
-                entrada = round(float(ultimo["Close"]), 2)
-
-                atr = round(float(ultimo["ATR"]), 2)
+                # =============================================
+                # STOP E GAIN PELO ATR
+                # =============================================
 
                 stop = round(
                     entrada - (atr * 1.5),
                     2
                 )
 
-                alvo = round(
+                gain = round(
                     entrada + (atr * 3),
                     2
                 )
 
-                score = int(
-                    (
-                        ultimo["ADX"] * 0.4 +
-                        ultimo["VOL_REL"] * 20 +
-                        ultimo["RSI"] * 0.4
-                    )
+                # =============================================
+                # RISCO RETORNO
+                # =============================================
+
+                risco = round(
+                    entrada - stop,
+                    2
+                )
+
+                retorno = round(
+                    gain - entrada,
+                    2
+                )
+
+                rr = round(
+                    retorno / risco,
+                    2
+                )
+
+                # =============================================
+                # SCORE
+                # =============================================
+
+                score = calcular_score(
+
+                    d["ADX"],
+
+                    d["DI+"],
+                    d["DI-"],
+
+                    d["K"],
+                    d["D"],
+
+                    s["K"],
+                    s["D"]
+
                 )
 
                 resultados.append({
 
                     "Ativo": ativo,
 
-                    "Setup": setup,
+                    "Entrada": entrada,
 
-                    "Preço": entrada,
+                    "Gain": gain,
+
+                    "Loss": stop,
 
                     "ATR": atr,
 
-                    "ADX": round(float(ultimo["ADX"]), 1),
-
-                    "RSI": round(float(ultimo["RSI"]), 1),
-
-                    "Volume Relativo": round(
-                        float(ultimo["VOL_REL"]),
-                        2
+                    "ADX": round(
+                        float(d["ADX"]),
+                        1
                     ),
 
-                    "Alvo": alvo,
+                    "DI+": round(
+                        float(d["DI+"]),
+                        1
+                    ),
 
-                    "Stop": stop,
+                    "DI-": round(
+                        float(d["DI-"]),
+                        1
+                    ),
+
+                    "%K Diário": round(
+                        float(d["K"]),
+                        1
+                    ),
+
+                    "%D Diário": round(
+                        float(d["D"]),
+                        1
+                    ),
+
+                    "%K Semanal": round(
+                        float(s["K"]),
+                        1
+                    ),
+
+                    "%D Semanal": round(
+                        float(s["D"]),
+                        1
+                    ),
+
+                    "R/R": rr,
+
+                    "Probabilidade": f"{score}%",
 
                     "Score": score
                 })
@@ -302,6 +471,7 @@ def executar_scanner():
     progresso.empty()
 
     if len(resultados) == 0:
+
         return pd.DataFrame()
 
     resultado = pd.DataFrame(resultados)
@@ -317,248 +487,161 @@ def executar_scanner():
 # SIDEBAR
 # =========================================================
 
-st.sidebar.title("📈 Swing Trade Real")
-
-menu = st.sidebar.radio(
-    "Menu",
-    [
-        "Dashboard",
-        "Scanner",
-        "Gráfico"
-    ]
+st.sidebar.title(
+    "📈 Scanner Quantitativo"
 )
 
-st.sidebar.markdown("---")
+st.sidebar.markdown(
+    """
+Setup operacional:
+
+✔ Estocástico Diário
+✔ DMI
+✔ ADX > 18
+✔ Estocástico Semanal
+✔ ATR para Gain/Loss
+"""
+)
 
 # =========================================================
-# DASHBOARD
+# HEADER
 # =========================================================
 
-if menu == "Dashboard":
+st.title(
+    "📈 Scanner Quantitativo Swing Trade"
+)
 
-    st.title("📊 Dashboard")
+st.markdown(
+    """
+Scanner baseado em:
 
-    st.info(
-        "Dados reais via Yahoo Finance"
-    )
+- Estocástico 14-3-3
+- DMI
+- ADX
+- Confirmação semanal
+- ATR para targets
+"""
+)
 
-    st.markdown("---")
+st.markdown("---")
 
-    if st.button("🔄 Atualizar Mercado"):
+# =========================================================
+# EXECUTAR
+# =========================================================
 
-        st.cache_data.clear()
+if st.button("▶ Executar Scanner"):
 
-    scanner = executar_scanner()
+    resultado = executar_scanner()
 
-    if scanner.empty:
+    if resultado.empty:
 
         st.warning(
-            "Nenhuma oportunidade encontrada."
+            "Nenhum ativo encontrado."
         )
 
     else:
 
+        # =================================================
+        # MÉTRICAS
+        # =================================================
+
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
+
             st.metric(
                 "Ativos",
-                len(scanner)
+                len(resultado)
             )
 
         with col2:
+
             st.metric(
                 "Score Médio",
-                round(scanner["Score"].mean(), 1)
+                round(
+                    resultado["Score"].mean(),
+                    1
+                )
             )
 
         with col3:
+
             st.metric(
                 "ADX Médio",
-                round(scanner["ADX"].mean(), 1)
+                round(
+                    resultado["ADX"].mean(),
+                    1
+                )
             )
 
         with col4:
+
             st.metric(
-                "ATR Médio",
-                round(scanner["ATR"].mean(), 2)
+                "R/R Médio",
+                round(
+                    resultado["R/R"].mean(),
+                    2
+                )
             )
 
         st.markdown("---")
 
+        # =================================================
+        # TABELA
+        # =================================================
+
         st.dataframe(
-            scanner,
+
+            resultado.drop(
+                columns=["Score"]
+            ),
+
             use_container_width=True,
+
             hide_index=True,
-            height=650
-        )
 
-        fig = px.bar(
-            scanner.head(15),
-            x="Ativo",
-            y="Score",
-            color="Setup",
-            title="Top Operações"
-        )
-
-        fig.update_layout(
-            template="plotly_dark",
-            height=500
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-# =========================================================
-# SCANNER
-# =========================================================
-
-elif menu == "Scanner":
-
-    st.title("🔎 Scanner Operacional")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        score_min = st.slider(
-            "Score mínimo",
-            0,
-            100,
-            50
-        )
-
-    with col2:
-
-        adx_min = st.slider(
-            "ADX mínimo",
-            10,
-            50,
-            20
-        )
-
-    st.markdown("---")
-
-    if st.button("▶ Executar Scanner"):
-
-        scanner = executar_scanner()
-
-        if scanner.empty:
-
-            st.warning(
-                "Nenhum ativo encontrado."
-            )
-
-        else:
-
-            scanner = scanner[
-                scanner["Score"] >= score_min
-            ]
-
-            scanner = scanner[
-                scanner["ADX"] >= adx_min
-            ]
-
-            st.success(
-                f"{len(scanner)} oportunidades encontradas."
-            )
-
-            st.dataframe(
-                scanner,
-                use_container_width=True,
-                hide_index=True,
-                height=650
-            )
-
-            fig = px.scatter(
-                scanner,
-                x="ADX",
-                y="Score",
-                size="ATR",
-                color="Setup",
-                hover_data=["Ativo"],
-                title="Mapa de Força"
-            )
-
-            fig.update_layout(
-                template="plotly_dark",
-                height=600
-            )
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True
-            )
-
-# =========================================================
-# GRÁFICO
-# =========================================================
-
-elif menu == "Gráfico":
-
-    st.title("📉 Análise Técnica")
-
-    ativo = st.selectbox(
-        "Escolha o ativo",
-        ATIVOS
-    )
-
-    df = baixar_dados(ativo)
-
-    if df is not None:
-
-        df = calcular_indicadores(df)
-
-        fig = px.line(
-            df,
-            y=[
-                "Close",
-                "EMA9",
-                "EMA21",
-                "EMA50"
-            ],
-            title=ativo
-        )
-
-        fig.update_layout(
-            template="plotly_dark",
             height=700
         )
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True
+        st.markdown("---")
+
+        # =================================================
+        # GRÁFICO
+        # =================================================
+
+        fig = px.scatter(
+
+            resultado,
+
+            x="ADX",
+
+            y="Score",
+
+            size="ATR",
+
+            color="R/R",
+
+            hover_data=["Ativo"],
+
+            title="Mapa Quantitativo"
+
         )
 
-        ultimo = df.iloc[-1]
+        fig.update_layout(
 
-        col1, col2, col3, col4 = st.columns(4)
+            template="plotly_dark",
 
-        with col1:
-            st.metric(
-                "Preço",
-                round(float(ultimo["Close"]), 2)
-            )
+            height=650
 
-        with col2:
-            st.metric(
-                "RSI",
-                round(float(ultimo["RSI"]), 1)
-            )
+        )
 
-        with col3:
-            st.metric(
-                "ADX",
-                round(float(ultimo["ADX"]), 1)
-            )
+        st.plotly_chart(
 
-        with col4:
-            st.metric(
-                "ATR",
-                round(float(ultimo["ATR"]), 2)
-            )
+            fig,
+
+            use_container_width=True
+
+        )
 
 # =========================================================
 # FOOTER
@@ -567,8 +650,11 @@ elif menu == "Gráfico":
 st.markdown("---")
 
 st.caption(
-    f'''
+
+    f"""
 Última atualização:
+
 {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-'''
+"""
+
 )
