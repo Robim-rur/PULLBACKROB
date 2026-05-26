@@ -28,7 +28,7 @@ st.set_page_config(
 # =========================================================
 
 GAIN_FIXO = 0.03
-LOSS_FIXO = 0.05
+LOSS_FIXO = 0.03
 
 ADX_MINIMO = 17
 
@@ -737,10 +737,6 @@ if st.button("▶ Executar Scanner"):
 
     aprovados, reprovados = executar_scanner()
 
-    # =====================================================
-    # APROVADOS
-    # =====================================================
-
     st.subheader("✅ Ativos Aprovados")
 
     if aprovados.empty:
@@ -764,7 +760,7 @@ if st.button("▶ Executar Scanner"):
 
             st.metric(
                 "Win Rate Médio",
-                f"{round(aprovados['Score'].mean(),4)}"
+                f"{round(aprovados['Expectância'].mean(),4)}"
             )
 
         with col3:
@@ -800,10 +796,6 @@ if st.button("▶ Executar Scanner"):
             height=700
         )
 
-        # =================================================
-        # GRÁFICO
-        # =================================================
-
         fig = px.scatter(
 
             aprovados,
@@ -831,10 +823,6 @@ if st.button("▶ Executar Scanner"):
             fig,
             use_container_width=True
         )
-
-    # =====================================================
-    # REPROVADOS
-    # =====================================================
 
     st.markdown("---")
 
