@@ -67,7 +67,7 @@ ATIVOS = [
 ]
 
 # =========================================================
-# DOWNLOAD
+# DOWNLOAD DADOS
 # =========================================================
 
 @st.cache_data(ttl=3600)
@@ -204,10 +204,6 @@ def calcular_expectancia(winrate):
 
     )
 
-    # =====================================================
-    # CONVERTE PARA %
-    # =====================================================
-
     return round(
         expectativa * 100,
         2
@@ -283,7 +279,7 @@ def calcular_probabilidade(
                 continue
 
             # =================================================
-            # GATILHO
+            # ENTRADA
             # =================================================
 
             entrada = candle["High"]
@@ -306,14 +302,23 @@ def calcular_probabilidade(
 
             resultado = None
 
+            entrada_acionada = False
+
             for _, prox in futuro.iterrows():
 
                 # =============================================
-                # ENTRADA ACIONADA?
+                # ENTRADA ACIONADA
                 # =============================================
 
-                if prox["High"] < entrada:
-                    continue
+                if not entrada_acionada:
+
+                    if prox["High"] >= entrada:
+
+                        entrada_acionada = True
+
+                    else:
+
+                        continue
 
                 # =============================================
                 # GAIN
@@ -335,13 +340,38 @@ def calcular_probabilidade(
 
                     break
 
+            # =================================================
+            # EXPIRAÇÃO
+            # =================================================
+
+            if resultado is None:
+
+                fechamento_final = (
+                    futuro.iloc[-1]["Close"]
+                )
+
+                if fechamento_final >= entrada:
+
+                    resultado = "GAIN"
+
+                else:
+
+                    resultado = "LOSS"
+
+            # =================================================
+            # CONTABILIZAÇÃO
+            # =================================================
+
             if resultado == "GAIN":
+
                 gains += 1
 
-            elif resultado == "LOSS":
+            else:
+
                 losses += 1
 
         except:
+
             continue
 
     if total == 0:
@@ -554,6 +584,7 @@ def executar_scanner():
             })
 
         except:
+
             continue
 
     barra.empty()
@@ -580,13 +611,16 @@ st.title(
 )
 
 st.markdown("""
-Setup:
-- Estocástico diário
-- DMI diário
+### Setup
+
+- Estocástico Diário 14-3-3
+- DMI Diário
 - ADX > 20
 - Fechamento acima EMA21
-- Estocástico semanal
+- Estocástico Semanal
 - Entrada acima da máxima
+- Gain fixo 4%
+- Loss fixo 5%
 """)
 
 st.markdown("---")
@@ -633,6 +667,7 @@ if st.button("▶ Executar Scanner"):
             hover_data=["Ativo"],
 
             title="Mapa Quantitativo"
+
         )
 
         fig.update_layout(
