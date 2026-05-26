@@ -108,6 +108,10 @@ if "backtest_resultado" not in st.session_state:
 
 ATIVOS = [
 
+     # =====================================================
+    # AÇÕES
+    # =====================================================
+
     "PETR4.SA",
     "VALE3.SA",
     "BBAS3.SA",
@@ -116,6 +120,7 @@ ATIVOS = [
     "WEGE3.SA",
     "PRIO3.SA",
     "RENT3.SA",
+
     "ELET3.SA",
     "ELET6.SA",
     "CPLE6.SA",
@@ -124,6 +129,7 @@ ATIVOS = [
     "EGIE3.SA",
     "VIVT3.SA",
     "TIMS3.SA",
+
     "ABEV3.SA",
     "RADL3.SA",
     "SUZB3.SA",
@@ -132,6 +138,7 @@ ATIVOS = [
     "USIM5.SA",
     "CSNA3.SA",
     "RAIL3.SA",
+
     "SBSP3.SA",
     "EQTL3.SA",
     "HYPE3.SA",
@@ -140,6 +147,7 @@ ATIVOS = [
     "ARZZ3.SA",
     "TOTS3.SA",
     "EMBR3.SA",
+
     "JBSS3.SA",
     "BEEF3.SA",
     "MRFG3.SA",
@@ -148,6 +156,7 @@ ATIVOS = [
     "SMTO3.SA",
     "B3SA3.SA",
     "BBSE3.SA",
+
     "BPAC11.SA",
     "SANB11.SA",
     "ITSA4.SA",
@@ -156,6 +165,7 @@ ATIVOS = [
     "POMO4.SA",
     "STBP3.SA",
     "TUPY3.SA",
+
     "DIRR3.SA",
     "CYRE3.SA",
     "EZTC3.SA",
@@ -164,6 +174,7 @@ ATIVOS = [
     "POSI3.SA",
     "MOVI3.SA",
     "PETZ3.SA",
+
     "COGN3.SA",
     "YDUQ3.SA",
     "MGLU3.SA",
@@ -172,12 +183,17 @@ ATIVOS = [
     "GOLL4.SA",
     "CVCB3.SA",
     "RRRP3.SA",
+
     "RECV3.SA",
     "ENAT3.SA",
     "ORVR3.SA",
     "AURE3.SA",
     "ENEV3.SA",
     "UGPA3.SA",
+
+    # =====================================================
+    # ETFs
+    # =====================================================
 
     "BOVA11.SA",
     "IVVB11.SA",
@@ -187,6 +203,10 @@ ATIVOS = [
     "DIVO11.SA",
     "NDIV11.SA",
 
+    # =====================================================
+    # FIIs
+    # =====================================================
+
     "HGLG11.SA",
     "XPLG11.SA",
     "VISC11.SA",
@@ -194,6 +214,7 @@ ATIVOS = [
     "KNRI11.SA",
     "KNCR11.SA",
     "KNIP11.SA",
+
     "CPTS11.SA",
     "IRDM11.SA",
     "TRXF11.SA",
@@ -201,10 +222,15 @@ ATIVOS = [
     "HGRU11.SA",
     "ALZR11.SA",
     "AUVP11.SA",
+
     "GARE11.SA",
     "IEEX11.SA",
     "UTLL11.SA",
     "GGRC11.SA",
+
+    # =====================================================
+    # BDRs
+    # =====================================================
 
     "AAPL34.SA",
     "AMZO34.SA",
@@ -213,6 +239,7 @@ ATIVOS = [
     "TSLA34.SA",
     "META34.SA",
     "NFLX34.SA",
+
     "NVDC34.SA",
     "MELI34.SA",
     "BABA34.SA",
@@ -220,6 +247,7 @@ ATIVOS = [
     "PYPL34.SA",
     "JNJB34.SA",
     "VISA34.SA",
+
     "WMTB34.SA",
     "NIKE34.SA",
     "ADBE34.SA",
