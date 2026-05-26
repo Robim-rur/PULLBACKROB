@@ -5,7 +5,6 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime
 import plotly.express as px
-import plotly.graph_objects as go
 
 # =========================================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -19,7 +18,7 @@ st.set_page_config(
 )
 
 # =========================================================
-# PASTA / DATABASE
+# PASTAS
 # =========================================================
 
 Path("data").mkdir(exist_ok=True)
@@ -51,11 +50,6 @@ div[data-testid="stMetric"] {
     border: 1px solid #2A2F3A;
     border-radius: 12px;
     padding: 15px;
-}
-
-.stDataFrame {
-    border: 1px solid #2A2F3A;
-    border-radius: 12px;
 }
 
 h1, h2, h3 {
@@ -99,21 +93,19 @@ inicializar_db()
 # SESSION STATE
 # =========================================================
 
-if "seed" not in st.session_state:
-    st.session_state.seed = 42
+if "dados" not in st.session_state:
+    st.session_state.dados = None
+
+if "scanner_resultado" not in st.session_state:
+    st.session_state.scanner_resultado = None
 
 # =========================================================
-# GERADOR DINÂMICO
+# LISTA DE ATIVOS
 # =========================================================
 
-def gerar_base_ativos(seed):
+ATIVOS = [
 
-    np.random.seed(seed)
-
-    ativos = [
-        # =====================================================
     # AÇÕES
-    # =====================================================
 
     "PETR4.SA",
     "VALE3.SA",
@@ -123,7 +115,6 @@ def gerar_base_ativos(seed):
     "WEGE3.SA",
     "PRIO3.SA",
     "RENT3.SA",
-
     "ELET3.SA",
     "ELET6.SA",
     "CPLE6.SA",
@@ -132,7 +123,6 @@ def gerar_base_ativos(seed):
     "EGIE3.SA",
     "VIVT3.SA",
     "TIMS3.SA",
-
     "ABEV3.SA",
     "RADL3.SA",
     "SUZB3.SA",
@@ -141,7 +131,6 @@ def gerar_base_ativos(seed):
     "USIM5.SA",
     "CSNA3.SA",
     "RAIL3.SA",
-
     "SBSP3.SA",
     "EQTL3.SA",
     "HYPE3.SA",
@@ -150,7 +139,6 @@ def gerar_base_ativos(seed):
     "ARZZ3.SA",
     "TOTS3.SA",
     "EMBR3.SA",
-
     "JBSS3.SA",
     "BEEF3.SA",
     "MRFG3.SA",
@@ -159,7 +147,6 @@ def gerar_base_ativos(seed):
     "SMTO3.SA",
     "B3SA3.SA",
     "BBSE3.SA",
-
     "BPAC11.SA",
     "SANB11.SA",
     "ITSA4.SA",
@@ -168,7 +155,6 @@ def gerar_base_ativos(seed):
     "POMO4.SA",
     "STBP3.SA",
     "TUPY3.SA",
-
     "DIRR3.SA",
     "CYRE3.SA",
     "EZTC3.SA",
@@ -177,7 +163,6 @@ def gerar_base_ativos(seed):
     "POSI3.SA",
     "MOVI3.SA",
     "PETZ3.SA",
-
     "COGN3.SA",
     "YDUQ3.SA",
     "MGLU3.SA",
@@ -186,7 +171,6 @@ def gerar_base_ativos(seed):
     "GOLL4.SA",
     "CVCB3.SA",
     "RRRP3.SA",
-
     "RECV3.SA",
     "ENAT3.SA",
     "ORVR3.SA",
@@ -194,9 +178,7 @@ def gerar_base_ativos(seed):
     "ENEV3.SA",
     "UGPA3.SA",
 
-    # =====================================================
     # ETFs
-    # =====================================================
 
     "BOVA11.SA",
     "IVVB11.SA",
@@ -206,9 +188,7 @@ def gerar_base_ativos(seed):
     "DIVO11.SA",
     "NDIV11.SA",
 
-    # =====================================================
     # FIIs
-    # =====================================================
 
     "HGLG11.SA",
     "XPLG11.SA",
@@ -217,7 +197,6 @@ def gerar_base_ativos(seed):
     "KNRI11.SA",
     "KNCR11.SA",
     "KNIP11.SA",
-
     "CPTS11.SA",
     "IRDM11.SA",
     "TRXF11.SA",
@@ -225,15 +204,12 @@ def gerar_base_ativos(seed):
     "HGRU11.SA",
     "ALZR11.SA",
     "AUVP11.SA",
-
     "GARE11.SA",
     "IEEX11.SA",
     "UTLL11.SA",
     "GGRC11.SA",
 
-    # =====================================================
     # BDRs
-    # =====================================================
 
     "AAPL34.SA",
     "AMZO34.SA",
@@ -242,7 +218,6 @@ def gerar_base_ativos(seed):
     "TSLA34.SA",
     "META34.SA",
     "NFLX34.SA",
-
     "NVDC34.SA",
     "MELI34.SA",
     "BABA34.SA",
@@ -250,7 +225,6 @@ def gerar_base_ativos(seed):
     "PYPL34.SA",
     "JNJB34.SA",
     "VISA34.SA",
-
     "WMTB34.SA",
     "NIKE34.SA",
     "ADBE34.SA",
@@ -258,7 +232,13 @@ def gerar_base_ativos(seed):
     "INTC34.SA",
     "JPMC34.SA",
     "ORCL34.SA"
-    ]
+]
+
+# =========================================================
+# GERADOR DE DADOS
+# =========================================================
+
+def gerar_dados():
 
     setups = [
         "Pullback EMA09",
@@ -269,7 +249,7 @@ def gerar_base_ativos(seed):
 
     lista = []
 
-    for ativo in ativos:
+    for ativo in ATIVOS:
 
         entrada = round(
             np.random.uniform(10, 80),
@@ -286,86 +266,41 @@ def gerar_base_ativos(seed):
             2
         )
 
-        score = np.random.randint(55, 99)
-
-        volume = round(
-            np.random.uniform(0.5, 4.5),
-            2
-        )
-
-        adx = round(
-            np.random.uniform(10, 50),
-            1
-        )
-
-        setup = np.random.choice(setups)
-
         lista.append({
+
             "Ativo": ativo,
-            "Setup": setup,
+
+            "Setup": np.random.choice(setups),
+
             "Entrada": entrada,
+
             "Alvo": alvo,
+
             "Stop": stop,
-            "Score": score,
-            "Volume Relativo": volume,
-            "ADX": adx,
+
+            "Score": np.random.randint(50, 100),
+
+            "Volume Relativo": round(
+                np.random.uniform(0.5, 5),
+                2
+            ),
+
+            "ADX": round(
+                np.random.uniform(10, 50),
+                1
+            ),
+
             "Tendência": "Alta"
         })
 
     return pd.DataFrame(lista)
 
 # =========================================================
-# FUNÇÕES
+# GERAR MERCADO
 # =========================================================
 
-def aplicar_filtros(
-    df,
-    score_min,
-    volume_min,
-    adx_min,
-    setup
-):
-
-    resultado = df.copy()
-
-    resultado = resultado[
-        resultado["Score"] >= score_min
-    ]
-
-    resultado = resultado[
-        resultado["Volume Relativo"] >= volume_min
-    ]
-
-    resultado = resultado[
-        resultado["ADX"] >= adx_min
-    ]
-
-    if setup != "Todos":
-
-        resultado = resultado[
-            resultado["Setup"] == setup
-        ]
-
-    return resultado.sort_values(
-        by="Score",
-        ascending=False
-    )
-
-def calcular_indice(df):
-
-    if len(df) == 0:
-        return 0
-
-    score = df["Score"].mean()
-
-    adx = df["ADX"].mean()
-
-    indice = (
-        score * 0.7 +
-        adx * 0.3
-    ) / 10
-
-    return round(indice, 1)
+if st.session_state.dados is None:
+    st.session_state.dados = gerar_dados()
 
 # =========================================================
 # SIDEBAR
@@ -388,31 +323,32 @@ menu = st.sidebar.radio(
 st.sidebar.markdown("---")
 
 # =========================================================
-# BOTÃO GLOBAL DE RECÁLCULO
+# BOTÃO RECARREGAR
 # =========================================================
 
-if st.sidebar.button("🔄 Recalcular Mercado"):
+if st.sidebar.button("🔄 Gerar Novo Mercado"):
 
-    st.session_state.seed = np.random.randint(
-        1,
-        100000
-    )
+    st.session_state.dados = gerar_dados()
 
-    st.rerun()
+    st.session_state.scanner_resultado = None
 
 # =========================================================
 # BASE PRINCIPAL
 # =========================================================
 
-df_base = gerar_base_ativos(
-    st.session_state.seed
-)
+df_base = st.session_state.dados
 
 # =========================================================
 # HEADER
 # =========================================================
 
-indice = calcular_indice(df_base)
+indice = round(
+    (
+        df_base["Score"].mean() * 0.7 +
+        df_base["ADX"].mean() * 0.3
+    ) / 10,
+    1
+)
 
 col1, col2 = st.columns([5, 1])
 
@@ -437,7 +373,7 @@ st.markdown("---")
 
 if menu == "Dashboard":
 
-    st.subheader("📊 Dashboard Geral")
+    st.subheader("📊 Dashboard")
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -452,20 +388,14 @@ if menu == "Dashboard":
 
         st.metric(
             "Score Médio",
-            round(
-                df_base["Score"].mean(),
-                1
-            )
+            round(df_base["Score"].mean(), 1)
         )
 
     with col3:
 
         st.metric(
             "ADX Médio",
-            round(
-                df_base["ADX"].mean(),
-                1
-            )
+            round(df_base["ADX"].mean(), 1)
         )
 
     with col4:
@@ -480,29 +410,26 @@ if menu == "Dashboard":
 
     st.markdown("---")
 
-    melhores = df_base.sort_values(
+    ranking = df_base.sort_values(
         by="Score",
         ascending=False
     )
 
-    st.subheader(
-        "🏆 Ranking das Oportunidades"
-    )
-
     st.dataframe(
-        melhores,
+        ranking,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        height=650
     )
 
     st.markdown("---")
 
     fig = px.bar(
-        melhores.head(10),
+        ranking.head(15),
         x="Ativo",
         y="Score",
         color="Setup",
-        title="Top 10 Scores"
+        title="Top 15 Scores"
     )
 
     fig.update_layout(
@@ -521,9 +448,7 @@ if menu == "Dashboard":
 
 elif menu == "Scanner":
 
-    st.subheader(
-        "🔎 Scanner Inteligente"
-    )
+    st.subheader("🔎 Scanner")
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -569,19 +494,42 @@ elif menu == "Scanner":
 
     st.markdown("---")
 
-    # =====================================================
-    # BOTÃO DE EXECUÇÃO
-    # =====================================================
-
     if st.button("▶ Executar Scanner"):
 
-        resultado = aplicar_filtros(
-            df_base,
-            score_min,
-            volume_min,
-            adx_min,
-            setup
+        resultado = df_base.copy()
+
+        resultado = resultado[
+            resultado["Score"] >= score_min
+        ]
+
+        resultado = resultado[
+            resultado["Volume Relativo"] >= volume_min
+        ]
+
+        resultado = resultado[
+            resultado["ADX"] >= adx_min
+        ]
+
+        if setup != "Todos":
+
+            resultado = resultado[
+                resultado["Setup"] == setup
+            ]
+
+        resultado = resultado.sort_values(
+            by="Score",
+            ascending=False
         )
+
+        st.session_state.scanner_resultado = resultado
+
+    # =====================================================
+    # EXIBIÇÃO
+    # =====================================================
+
+    if st.session_state.scanner_resultado is not None:
+
+        resultado = st.session_state.scanner_resultado
 
         st.success(
             f"{len(resultado)} ativos encontrados."
@@ -589,71 +537,34 @@ elif menu == "Scanner":
 
         st.markdown("---")
 
-        if len(resultado) == 0:
+        st.dataframe(
+            resultado,
+            use_container_width=True,
+            hide_index=True,
+            height=650
+        )
 
-            st.warning(
-                "Nenhum ativo encontrado."
-            )
+        st.markdown("---")
 
-        else:
+        fig = px.scatter(
+            resultado,
+            x="ADX",
+            y="Score",
+            color="Setup",
+            size="Volume Relativo",
+            hover_data=["Ativo"],
+            title="Força Relativa dos Ativos"
+        )
 
-            col1, col2, col3 = st.columns(3)
+        fig.update_layout(
+            template="plotly_dark",
+            height=600
+        )
 
-            with col1:
-
-                st.metric(
-                    "Quantidade",
-                    len(resultado)
-                )
-
-            with col2:
-
-                st.metric(
-                    "Maior Score",
-                    resultado["Score"].max()
-                )
-
-            with col3:
-
-                st.metric(
-                    "ADX Médio",
-                    round(
-                        resultado["ADX"].mean(),
-                        1
-                    )
-                )
-
-            st.markdown("---")
-
-            st.dataframe(
-                resultado,
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.markdown("---")
-
-            fig = go.Figure()
-
-            fig.add_trace(
-                go.Scatter(
-                    x=resultado["Ativo"],
-                    y=resultado["Score"],
-                    mode="lines+markers",
-                    name="Score"
-                )
-            )
-
-            fig.update_layout(
-                template="plotly_dark",
-                title="Força dos Ativos",
-                height=500
-            )
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True
-            )
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
 
 # =========================================================
 # BACKTEST
@@ -680,20 +591,13 @@ elif menu == "Backtest":
     with col2:
 
         trades = st.slider(
-            "Quantidade de Trades",
+            "Trades",
             20,
             300,
             100
         )
 
     if st.button("▶ Rodar Backtest"):
-
-        seed = np.random.randint(
-            1,
-            100000
-        )
-
-        np.random.seed(seed)
 
         winrate = round(
             np.random.uniform(55, 80),
@@ -746,7 +650,9 @@ elif menu == "Backtest":
             )
 
         historico = pd.DataFrame({
+
             "Trade": range(1, trades + 1),
+
             "Resultado": np.random.normal(
                 0.8,
                 2.2,
@@ -779,9 +685,7 @@ elif menu == "Backtest":
 
 elif menu == "Configurações":
 
-    st.subheader(
-        "⚙️ Configurações"
-    )
+    st.subheader("⚙️ Configurações")
 
     gain = st.slider(
         "Take Profit (%)",
@@ -798,21 +702,21 @@ elif menu == "Configurações":
     )
 
     score = st.slider(
-        "Score mínimo padrão",
+        "Score padrão",
         50,
         100,
         80
     )
 
     volume = st.slider(
-        "Volume mínimo padrão",
+        "Volume padrão",
         0.5,
         5.0,
         1.0
     )
 
     adx = st.slider(
-        "ADX mínimo padrão",
+        "ADX padrão",
         10,
         50,
         20
