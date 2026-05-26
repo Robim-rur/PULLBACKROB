@@ -19,7 +19,7 @@ from datetime import datetime
 # =========================================================
 
 st.set_page_config(
-    page_title="Scanner Quantitativo",
+    page_title="Scanner Quantitativo B3",
     page_icon="📈",
     layout="wide"
 )
@@ -28,10 +28,11 @@ st.set_page_config(
 # PARÂMETROS
 # =========================================================
 
-GAIN_FIXO = 0.04
+GAIN_FIXO = 0.05
 LOSS_FIXO = 0.04
 
 ADX_MINIMO = 20
+VOLUME_MINIMO = 20_000_000
 
 # =========================================================
 # ATIVOS
@@ -50,6 +51,17 @@ ATIVOS = [
     "RENT3.SA",
     "BBDC4.SA",
     "GGBR4.SA",
+    "CSNA3.SA",
+    "GOAU4.SA",
+    "RAIL3.SA",
+    "SUZB3.SA",
+    "JBSS3.SA",
+    "EQTL3.SA",
+    "VIVT3.SA",
+    "TIMS3.SA",
+    "RADL3.SA",
+    "TOTS3.SA",
+    "EMBR3.SA",
 
     # ETFs
 
@@ -63,11 +75,13 @@ ATIVOS = [
     "AAPL34.SA",
     "GOGL34.SA",
     "MSFT34.SA",
-    "TSLA34.SA"
+    "TSLA34.SA",
+    "META34.SA",
+    "NVDC34.SA"
 ]
 
 # =========================================================
-# DOWNLOAD DADOS
+# DOWNLOAD
 # =========================================================
 
 @st.cache_data(ttl=3600)
@@ -180,6 +194,37 @@ def calcular_indicadores(df):
 
     df["DI_NEG"] = adx.adx_neg()
 
+    # =====================================================
+    # VOLUME FINANCEIRO
+    # =====================================================
+
+    df["Financeiro"] = (
+        df["Close"] *
+        df["Volume"]
+    )
+
+    # =====================================================
+    # EMA21 ASCENDENTE
+    # =====================================================
+
+    df["EMA21_ASC"] = (
+        df["EMA21"] >
+        df["EMA21"].shift(1)
+    )
+
+    # =====================================================
+    # CANDLE ESTICADO
+    # =====================================================
+
+    df["AMPLITUDE"] = (
+        (
+            df["High"] -
+            df["Low"]
+        )
+        /
+        df["Close"]
+    ) * 100
+
     df.dropna(inplace=True)
 
     return df
@@ -210,7 +255,7 @@ def calcular_expectancia(winrate):
     )
 
 # =========================================================
-# BACKTEST HISTÓRICO
+# BACKTEST
 # =========================================================
 
 def calcular_probabilidade(
@@ -271,16 +316,25 @@ def calcular_probabilidade(
 
                 and
 
+                candle["EMA21_ASC"]
+
+                and
+
+                candle["Financeiro"] >
+                VOLUME_MINIMO
+
+                and
+
+                candle["AMPLITUDE"] < 6
+
+                and
+
                 semana["SEM_K_MAIOR"]
 
             )
 
             if not filtro:
                 continue
-
-            # =================================================
-            # ENTRADA
-            # =================================================
 
             entrada = candle["High"]
 
@@ -340,9 +394,9 @@ def calcular_probabilidade(
 
                     break
 
-            # =================================================
+            # =============================================
             # EXPIRAÇÃO
-            # =================================================
+            # =============================================
 
             if resultado is None:
 
@@ -358,9 +412,9 @@ def calcular_probabilidade(
 
                     resultado = "LOSS"
 
-            # =================================================
+            # =============================================
             # CONTABILIZAÇÃO
-            # =================================================
+            # =============================================
 
             if resultado == "GAIN":
 
@@ -419,8 +473,6 @@ def executar_scanner():
 
     aprovados = []
 
-    reprovados = []
-
     barra = st.progress(0)
 
     total_ativos = len(ATIVOS)
@@ -455,7 +507,7 @@ def executar_scanner():
             s = semanal.iloc[-2]
 
             # =================================================
-            # FILTROS
+            # FILTROS ATUAIS
             # =================================================
 
             filtros = (
@@ -476,19 +528,24 @@ def executar_scanner():
 
                 and
 
+                d["EMA21_ASC"]
+
+                and
+
+                d["Financeiro"] >
+                VOLUME_MINIMO
+
+                and
+
+                d["AMPLITUDE"] < 6
+
+                and
+
                 s["K"] > s["D"]
 
             )
 
             if not filtros:
-
-                reprovados.append({
-
-                    "Ativo": ativo,
-
-                    "Status": "Reprovado"
-                })
-
                 continue
 
             estatistica = calcular_probabilidade(
@@ -536,14 +593,9 @@ def executar_scanner():
                     1
                 ),
 
-                "EMA21": round(
-                    float(d["EMA21"]),
-                    2
-                ),
-
-                "Fechamento": round(
-                    float(d["Close"]),
-                    2
+                "Financeiro": round(
+                    float(d["Financeiro"] / 1_000_000),
+                    1
                 ),
 
                 "%K Diário": round(
@@ -591,8 +643,6 @@ def executar_scanner():
 
     aprovados = pd.DataFrame(aprovados)
 
-    reprovados = pd.DataFrame(reprovados)
-
     if not aprovados.empty:
 
         aprovados = aprovados.sort_values(
@@ -600,38 +650,43 @@ def executar_scanner():
             ascending=False
         )
 
-    return aprovados, reprovados
+    return aprovados
 
 # =========================================================
 # HEADER
 # =========================================================
 
 st.title(
-    "📈 Scanner Quantitativo"
+    "📈 Scanner Quantitativo B3"
 )
 
 st.markdown("""
-### Setup
+
+### Setup Utilizado
 
 - Estocástico Diário 14-3-3
 - DMI Diário
 - ADX > 20
 - Fechamento acima EMA21
-- Estocástico Semanal
+- EMA21 ascendente
+- Volume financeiro > 20 milhões
+- Candle não esticado
+- Estocástico semanal alinhado
 - Entrada acima da máxima
-- Gain fixo 4%
-- Loss fixo 5%
+- Gain fixo 5%
+- Loss fixo 4%
+
 """)
 
 st.markdown("---")
 
 # =========================================================
-# EXECUTAR
+# EXECUÇÃO
 # =========================================================
 
 if st.button("▶ Executar Scanner"):
 
-    aprovados, reprovados = executar_scanner()
+    aprovados = executar_scanner()
 
     st.subheader(
         "✅ Ativos Aprovados"
@@ -679,19 +734,6 @@ if st.button("▶ Executar Scanner"):
             fig,
             use_container_width=True
         )
-
-    st.markdown("---")
-
-    st.subheader(
-        "❌ Reprovados"
-    )
-
-    st.dataframe(
-        reprovados,
-        use_container_width=True,
-        hide_index=True,
-        height=350
-    )
 
 # =========================================================
 # FOOTER
