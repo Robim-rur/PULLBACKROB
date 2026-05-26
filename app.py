@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 
 # ==========================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -13,6 +14,14 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ==========================================
+# CRIA PASTA DATA AUTOMATICAMENTE
+# ==========================================
+
+Path("data").mkdir(exist_ok=True)
+
+DB_PATH = "data/historico.db"
 
 # ==========================================
 # CSS CUSTOMIZADO
@@ -52,6 +61,61 @@ table {
 """, unsafe_allow_html=True)
 
 # ==========================================
+# FUNÇÕES AUXILIARES
+# ==========================================
+
+def conectar_db():
+    conn = sqlite3.connect(DB_PATH)
+    return conn
+
+def inicializar_db():
+
+    conn = conectar_db()
+
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS configuracoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gain REAL,
+            stop REAL,
+            score INTEGER
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def carregar_sinais():
+
+    dados = {
+        "Ativo": ["PETR4", "VALE3", "ITUB4", "WEGE3"],
+        "Setup": [
+            "Pullback EMA09",
+            "Rompimento",
+            "Pullback EMA29",
+            "IFR2"
+        ],
+        "Entrada": [38.20, 67.40, 31.10, 52.90],
+        "Alvo": [39.35, 69.42, 32.03, 54.48],
+        "Stop": [36.29, 64.03, 29.54, 50.25],
+        "Score": [92, 88, 85, 81],
+        "Tendência": ["Alta", "Alta", "Alta", "Alta"],
+        "Volume Relativo": [1.8, 2.1, 1.5, 1.3]
+    }
+
+    return pd.DataFrame(dados)
+
+def calcular_indice_mercado():
+    return 7.8
+
+# ==========================================
+# INICIALIZA BANCO
+# ==========================================
+
+inicializar_db()
+
+# ==========================================
 # SIDEBAR
 # ==========================================
 
@@ -81,48 +145,6 @@ Sistema focado em:
 ✅ Qualidade acima de quantidade  
 """
 )
-
-# ==========================================
-# FUNÇÕES AUXILIARES
-# ==========================================
-
-DB_PATH = "data/historico.db"
-
-def conectar_db():
-    conn = sqlite3.connect(DB_PATH)
-    return conn
-
-def carregar_sinais():
-    """
-    Exemplo simplificado.
-    Depois será substituído pelos sinais reais.
-    """
-
-    dados = {
-        "Ativo": ["PETR4", "VALE3", "ITUB4", "WEGE3"],
-        "Setup": [
-            "Pullback EMA09",
-            "Rompimento",
-            "Pullback EMA29",
-            "IFR2"
-        ],
-        "Entrada": [38.20, 67.40, 31.10, 52.90],
-        "Alvo": [39.35, 69.42, 32.03, 54.48],
-        "Stop": [36.29, 64.03, 29.54, 50.25],
-        "Score": [92, 88, 85, 81],
-        "Tendência": ["Alta", "Alta", "Alta", "Alta"],
-        "Volume Relativo": [1.8, 2.1, 1.5, 1.3]
-    }
-
-    return pd.DataFrame(dados)
-
-def calcular_indice_mercado():
-    """
-    Índice fictício inicial.
-    Depois será calculado dinamicamente.
-    """
-
-    return 7.8
 
 # ==========================================
 # HEADER PRINCIPAL
@@ -260,10 +282,6 @@ elif menu == "Scanner":
                 "Alta"
             ]
         )
-
-    # ======================================
-    # FILTROS
-    # ======================================
 
     sinais = sinais[
         sinais["Score"] >= score_min
@@ -436,6 +454,22 @@ elif menu == "Configurações":
     st.markdown("---")
 
     if st.button("💾 Salvar Configurações"):
+
+        conn = conectar_db()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO configuracoes (
+                gain,
+                stop,
+                score
+            )
+            VALUES (?, ?, ?)
+        """, (gain, stop, score))
+
+        conn.commit()
+        conn.close()
+
         st.success("Configurações salvas com sucesso.")
 
 # ==========================================
