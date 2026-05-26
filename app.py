@@ -4,7 +4,6 @@
 
 import streamlit as st
 import pandas as pd
-import numpy as np
 import yfinance as yf
 import plotly.express as px
 
@@ -40,18 +39,14 @@ VOLUME_MINIMO = 20_000_000
 
 SETORES = {
 
-    # =====================================================
     # PETRÓLEO
-    # =====================================================
 
     "PETR4.SA": "Petróleo",
     "PRIO3.SA": "Petróleo",
     "RRRP3.SA": "Petróleo",
     "RECV3.SA": "Petróleo",
 
-    # =====================================================
     # MINERAÇÃO / SIDERURGIA
-    # =====================================================
 
     "VALE3.SA": "Mineração",
     "GGBR4.SA": "Siderurgia",
@@ -59,9 +54,7 @@ SETORES = {
     "GOAU4.SA": "Siderurgia",
     "USIM5.SA": "Siderurgia",
 
-    # =====================================================
     # BANCOS
-    # =====================================================
 
     "ITUB4.SA": "Bancos",
     "BBAS3.SA": "Bancos",
@@ -69,72 +62,54 @@ SETORES = {
     "SANB11.SA": "Bancos",
     "BPAC11.SA": "Bancos",
 
-    # =====================================================
     # ENERGIA
-    # =====================================================
 
     "EQTL3.SA": "Energia",
     "TAEE11.SA": "Energia",
     "EGIE3.SA": "Energia",
 
-    # =====================================================
     # TELECOM
-    # =====================================================
 
     "VIVT3.SA": "Telecom",
     "TIMS3.SA": "Telecom",
 
-    # =====================================================
     # INDUSTRIAL
-    # =====================================================
 
     "WEGE3.SA": "Industrial",
     "EMBR3.SA": "Industrial",
     "TUPY3.SA": "Industrial",
 
-    # =====================================================
     # CONSUMO
-    # =====================================================
 
     "RADL3.SA": "Varejo Farma",
     "LREN3.SA": "Varejo",
     "ARZZ3.SA": "Varejo",
 
-    # =====================================================
     # PROTEÍNA
-    # =====================================================
 
     "JBSS3.SA": "Proteína",
     "BEEF3.SA": "Proteína",
     "MRFG3.SA": "Proteína",
     "BRFS3.SA": "Proteína",
 
-    # =====================================================
     # TECNOLOGIA
-    # =====================================================
 
     "TOTS3.SA": "Tecnologia",
     "POSI3.SA": "Tecnologia",
 
-    # =====================================================
     # LOGÍSTICA
-    # =====================================================
 
     "RAIL3.SA": "Logística",
     "STBP3.SA": "Logística",
 
-    # =====================================================
     # ETFs
-    # =====================================================
 
     "BOVA11.SA": "ETF",
     "IVVB11.SA": "ETF",
     "SMAL11.SA": "ETF",
     "HASH11.SA": "ETF",
 
-    # =====================================================
     # BDRs
-    # =====================================================
 
     "AAPL34.SA": "Tecnologia",
     "GOGL34.SA": "Tecnologia",
@@ -145,13 +120,13 @@ SETORES = {
 }
 
 # =========================================================
-# ATIVOS
+# LISTA DE ATIVOS
 # =========================================================
 
 ATIVOS = list(SETORES.keys())
 
 # =========================================================
-# DOWNLOAD
+# DOWNLOAD DOS DADOS
 # =========================================================
 
 @st.cache_data(ttl=3600)
@@ -182,20 +157,13 @@ def baixar_dados(
                 .get_level_values(0)
             )
 
-        colunas = [
+        df = df[[
             "Open",
             "High",
             "Low",
             "Close",
             "Volume"
-        ]
-
-        for coluna in colunas:
-
-            df[coluna] = pd.to_numeric(
-                df[coluna],
-                errors="coerce"
-            )
+        ]]
 
         df.dropna(inplace=True)
 
@@ -310,13 +278,9 @@ def calcular_expectancia(winrate):
     pl = 1 - pw
 
     expectativa = (
-
         (pw * GAIN_FIXO)
-
         -
-
         (pl * LOSS_FIXO)
-
     )
 
     return round(
@@ -325,7 +289,7 @@ def calcular_expectancia(winrate):
     )
 
 # =========================================================
-# BACKTEST
+# BACKTEST ESTATÍSTICO
 # =========================================================
 
 def calcular_probabilidade(
@@ -395,7 +359,8 @@ def calcular_probabilidade(
 
                 and
 
-                semana["SEM_K_MAIOR"]
+                semana["K"] >
+                semana["D"]
 
             )
 
@@ -561,13 +526,17 @@ def executar_scanner():
 
             semanal = calcular_indicadores(semanal)
 
+            # =============================================
+            # CANDLE FECHADO
+            # =============================================
+
             d = diario.iloc[-2]
 
             s = semanal.iloc[-2]
 
-            # =================================================
-            # FILTROS ATUAIS
-            # =================================================
+            # =============================================
+            # FILTROS
+            # =============================================
 
             filtros = (
 
@@ -716,7 +685,42 @@ def executar_scanner():
 
     aprovados = pd.DataFrame(aprovados)
 
+    # =====================================================
+    # ORGANIZAÇÃO DAS COLUNAS
+    # =====================================================
+
     if not aprovados.empty:
+
+        colunas = [
+
+            "Ativo",
+            "Setor",
+
+            "Entrada",
+            "Gain",
+            "Loss",
+
+            "Probabilidade Matemática",
+            "Expectância",
+            "Payoff",
+
+            "ADX",
+            "Financeiro (Mi)",
+
+            "%K Diário",
+            "%D Diário",
+
+            "%K Semanal",
+            "%D Semanal",
+
+            "Sinais",
+            "Gains",
+            "Losses",
+
+            "Score"
+        ]
+
+        aprovados = aprovados[colunas]
 
         aprovados = aprovados.sort_values(
             by="Score",
@@ -745,7 +749,7 @@ st.markdown("""
 - Volume financeiro > 20 milhões
 - Candle não esticado
 - Estocástico semanal alinhado
-- Entrada acima da máxima
+- Entrada acima da máxima do candle
 - Gain fixo 3%
 - Loss fixo 4%
 
@@ -779,8 +783,12 @@ if st.button("▶ Executar Scanner"):
             ),
             use_container_width=True,
             hide_index=True,
-            height=800
+            height=850
         )
+
+        # =================================================
+        # GRÁFICO
+        # =================================================
 
         fig = px.scatter(
 
