@@ -99,13 +99,14 @@ if "dados" not in st.session_state:
 if "scanner_resultado" not in st.session_state:
     st.session_state.scanner_resultado = None
 
+if "backtest_resultado" not in st.session_state:
+    st.session_state.backtest_resultado = None
+
 # =========================================================
 # LISTA DE ATIVOS
 # =========================================================
 
 ATIVOS = [
-
-    # AÇÕES
 
     "PETR4.SA",
     "VALE3.SA",
@@ -178,8 +179,6 @@ ATIVOS = [
     "ENEV3.SA",
     "UGPA3.SA",
 
-    # ETFs
-
     "BOVA11.SA",
     "IVVB11.SA",
     "SMAL11.SA",
@@ -187,8 +186,6 @@ ATIVOS = [
     "GOLD11.SA",
     "DIVO11.SA",
     "NDIV11.SA",
-
-    # FIIs
 
     "HGLG11.SA",
     "XPLG11.SA",
@@ -208,8 +205,6 @@ ATIVOS = [
     "IEEX11.SA",
     "UTLL11.SA",
     "GGRC11.SA",
-
-    # BDRs
 
     "AAPL34.SA",
     "AMZO34.SA",
@@ -235,7 +230,7 @@ ATIVOS = [
 ]
 
 # =========================================================
-# GERADOR DE DADOS
+# GERAR DADOS
 # =========================================================
 
 def gerar_dados():
@@ -296,19 +291,19 @@ def gerar_dados():
     return pd.DataFrame(lista)
 
 # =========================================================
-# GERAR MERCADO
+# INICIALIZAÇÃO
 # =========================================================
 
 if st.session_state.dados is None:
     st.session_state.dados = gerar_dados()
+
+df_base = st.session_state.dados
 
 # =========================================================
 # SIDEBAR
 # =========================================================
 
 st.sidebar.title("📈 Swing Trade AUVP11")
-
-st.sidebar.markdown("---")
 
 menu = st.sidebar.radio(
     "Menu",
@@ -323,7 +318,7 @@ menu = st.sidebar.radio(
 st.sidebar.markdown("---")
 
 # =========================================================
-# BOTÃO RECARREGAR
+# BOTÃO GLOBAL
 # =========================================================
 
 if st.sidebar.button("🔄 Gerar Novo Mercado"):
@@ -332,11 +327,9 @@ if st.sidebar.button("🔄 Gerar Novo Mercado"):
 
     st.session_state.scanner_resultado = None
 
-# =========================================================
-# BASE PRINCIPAL
-# =========================================================
+    st.session_state.backtest_resultado = None
 
-df_base = st.session_state.dados
+    st.success("Novo mercado gerado.")
 
 # =========================================================
 # HEADER
@@ -353,17 +346,10 @@ indice = round(
 col1, col2 = st.columns([5, 1])
 
 with col1:
-
-    st.title(
-        "📈 Swing Trade Profissional"
-    )
+    st.title("📈 Swing Trade Profissional")
 
 with col2:
-
-    st.metric(
-        "Mercado",
-        f"{indice}/10"
-    )
+    st.metric("Mercado", f"{indice}/10")
 
 st.markdown("---")
 
@@ -378,28 +364,21 @@ if menu == "Dashboard":
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-
-        st.metric(
-            "Ativos",
-            len(df_base)
-        )
+        st.metric("Ativos", len(df_base))
 
     with col2:
-
         st.metric(
             "Score Médio",
             round(df_base["Score"].mean(), 1)
         )
 
     with col3:
-
         st.metric(
             "ADX Médio",
             round(df_base["ADX"].mean(), 1)
         )
 
     with col4:
-
         st.metric(
             "Volume Médio",
             round(
@@ -453,7 +432,6 @@ elif menu == "Scanner":
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-
         score_min = st.slider(
             "Score mínimo",
             50,
@@ -462,7 +440,6 @@ elif menu == "Scanner":
         )
 
     with col2:
-
         volume_min = st.slider(
             "Volume mínimo",
             0.5,
@@ -471,7 +448,6 @@ elif menu == "Scanner":
         )
 
     with col3:
-
         adx_min = st.slider(
             "ADX mínimo",
             10,
@@ -480,7 +456,6 @@ elif menu == "Scanner":
         )
 
     with col4:
-
         setup = st.selectbox(
             "Setup",
             [
@@ -523,10 +498,6 @@ elif menu == "Scanner":
 
         st.session_state.scanner_resultado = resultado
 
-    # =====================================================
-    # EXIBIÇÃO
-    # =====================================================
-
     if st.session_state.scanner_resultado is not None:
 
         resultado = st.session_state.scanner_resultado
@@ -534,8 +505,6 @@ elif menu == "Scanner":
         st.success(
             f"{len(resultado)} ativos encontrados."
         )
-
-        st.markdown("---")
 
         st.dataframe(
             resultado,
@@ -553,7 +522,7 @@ elif menu == "Scanner":
             color="Setup",
             size="Volume Relativo",
             hover_data=["Ativo"],
-            title="Força Relativa dos Ativos"
+            title="Força Relativa"
         )
 
         fig.update_layout(
@@ -597,20 +566,71 @@ elif menu == "Backtest":
             100
         )
 
+    st.markdown("---")
+
     if st.button("▶ Rodar Backtest"):
 
+        # =====================================================
+        # RESULTADOS DIFERENTES POR SETUP
+        # =====================================================
+
+        parametros = {
+
+            "Pullback EMA09": {
+                "win_min": 65,
+                "win_max": 80,
+                "payoff_min": 1.1,
+                "payoff_max": 1.8,
+                "volatilidade": 1.5
+            },
+
+            "Pullback EMA29": {
+                "win_min": 55,
+                "win_max": 72,
+                "payoff_min": 1.4,
+                "payoff_max": 2.3,
+                "volatilidade": 2.2
+            },
+
+            "Rompimento": {
+                "win_min": 45,
+                "win_max": 65,
+                "payoff_min": 1.8,
+                "payoff_max": 3.5,
+                "volatilidade": 3.5
+            },
+
+            "IFR2": {
+                "win_min": 70,
+                "win_max": 88,
+                "payoff_min": 0.8,
+                "payoff_max": 1.4,
+                "volatilidade": 1.2
+            }
+        }
+
+        p = parametros[setup_bt]
+
         winrate = round(
-            np.random.uniform(55, 80),
+            np.random.uniform(
+                p["win_min"],
+                p["win_max"]
+            ),
             1
         )
 
         payoff = round(
-            np.random.uniform(1.0, 2.5),
+            np.random.uniform(
+                p["payoff_min"],
+                p["payoff_max"]
+            ),
             2
         )
 
         lucro = round(
-            np.random.uniform(10, 60),
+            (
+                winrate / 100
+            ) * payoff * np.random.uniform(15, 35),
             1
         )
 
@@ -619,59 +639,75 @@ elif menu == "Backtest":
             1
         )
 
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-
-            st.metric(
-                "Win Rate",
-                f"{winrate}%"
-            )
-
-        with col2:
-
-            st.metric(
-                "Payoff",
-                payoff
-            )
-
-        with col3:
-
-            st.metric(
-                "Lucro",
-                f"+{lucro}%"
-            )
-
-        with col4:
-
-            st.metric(
-                "Drawdown",
-                f"-{drawdown}%"
-            )
-
         historico = pd.DataFrame({
 
-            "Trade": range(1, trades + 1),
+            "Trade": range(
+                1,
+                trades + 1
+            ),
 
             "Resultado": np.random.normal(
-                0.8,
-                2.2,
+                payoff,
+                p["volatilidade"],
                 trades
             ).cumsum()
         })
 
+        st.session_state.backtest_resultado = {
+            "setup": setup_bt,
+            "winrate": winrate,
+            "payoff": payoff,
+            "lucro": lucro,
+            "drawdown": drawdown,
+            "historico": historico
+        }
+
+    # =====================================================
+    # EXIBIÇÃO
+    # =====================================================
+
+    if st.session_state.backtest_resultado is not None:
+
+        bt = st.session_state.backtest_resultado
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "Win Rate",
+                f"{bt['winrate']}%"
+            )
+
+        with col2:
+            st.metric(
+                "Payoff",
+                bt["payoff"]
+            )
+
+        with col3:
+            st.metric(
+                "Lucro",
+                f"+{bt['lucro']}%"
+            )
+
+        with col4:
+            st.metric(
+                "Drawdown",
+                f"-{bt['drawdown']}%"
+            )
+
         st.markdown("---")
 
         fig = px.line(
-            historico,
+            bt["historico"],
             x="Trade",
             y="Resultado",
-            title=f"Evolução Patrimonial — {setup_bt}"
+            title=f"Evolução Patrimonial — {bt['setup']}"
         )
 
         fig.update_layout(
             template="plotly_dark",
-            height=500
+            height=550
         )
 
         st.plotly_chart(
