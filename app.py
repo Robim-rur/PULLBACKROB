@@ -28,7 +28,7 @@ st.set_page_config(
 # PARÂMETROS
 # =========================================================
 
-GAIN_FIXO = 0.03
+GAIN_FIXO = 0.05
 LOSS_FIXO = 0.04
 
 ADX_MINIMO = 20
@@ -570,6 +570,11 @@ def executar_scanner():
                 2
             )
 
+            payoff = round(
+                GAIN_FIXO / LOSS_FIXO,
+                2
+            )
+
             aprovados.append({
 
                 "Ativo": ativo,
@@ -580,7 +585,7 @@ def executar_scanner():
 
                 "Loss": loss,
 
-                "Win Rate": (
+                "Probabilidade Matemática": (
                     f"{estatistica['winrate']}%"
                 ),
 
@@ -588,12 +593,14 @@ def executar_scanner():
                     f"{estatistica['expectancia']}%"
                 ),
 
+                "Payoff": payoff,
+
                 "ADX": round(
                     float(d["ADX"]),
                     1
                 ),
 
-                "Financeiro": round(
+                "Financeiro (Mi)": round(
                     float(d["Financeiro"] / 1_000_000),
                     1
                 ),
@@ -706,7 +713,7 @@ if st.button("▶ Executar Scanner"):
             ),
             use_container_width=True,
             hide_index=True,
-            height=700
+            height=750
         )
 
         fig = px.scatter(
