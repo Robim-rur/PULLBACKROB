@@ -1,12 +1,15 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import sqlite3
-from datetime import datetime
 from pathlib import Path
+from datetime import datetime
+import plotly.express as px
+import plotly.graph_objects as go
 
-# ==========================================
+# =========================================================
 # CONFIGURAÇÃO DA PÁGINA
-# ==========================================
+# =========================================================
 
 st.set_page_config(
     page_title="Swing Trade AUVP11",
@@ -15,17 +18,17 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ==========================================
-# CRIA PASTA DATA AUTOMATICAMENTE
-# ==========================================
+# =========================================================
+# PASTA / DATABASE
+# =========================================================
 
 Path("data").mkdir(exist_ok=True)
 
 DB_PATH = "data/historico.db"
 
-# ==========================================
-# CSS CUSTOMIZADO
-# ==========================================
+# =========================================================
+# CSS MELHORADO
+# =========================================================
 
 st.markdown("""
 <style>
@@ -36,37 +39,38 @@ st.markdown("""
 
 .block-container {
     padding-top: 1rem;
+    padding-bottom: 2rem;
 }
 
-[data-testid="stMetric"] {
-    background-color: #161B22;
-    border: 1px solid #262730;
-    padding: 15px;
-    border-radius: 12px;
-}
-
-div[data-testid="stSidebar"] {
+section[data-testid="stSidebar"] {
     background-color: #111827;
 }
 
-h1, h2, h3 {
-    color: #FAFAFA;
+div[data-testid="stMetric"] {
+    background-color: #161B22;
+    border: 1px solid #2A2F3A;
+    border-radius: 12px;
+    padding: 15px;
 }
 
-table {
+.stDataFrame {
+    border: 1px solid #2A2F3A;
+    border-radius: 12px;
+}
+
+h1, h2, h3 {
     color: white;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# FUNÇÕES AUXILIARES
-# ==========================================
+# =========================================================
+# DATABASE
+# =========================================================
 
 def conectar_db():
-    conn = sqlite3.connect(DB_PATH)
-    return conn
+    return sqlite3.connect(DB_PATH)
 
 def inicializar_db():
 
@@ -79,52 +83,134 @@ def inicializar_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             gain REAL,
             stop REAL,
-            score INTEGER
+            score INTEGER,
+            volume REAL
         )
     """)
 
     conn.commit()
     conn.close()
 
-def carregar_sinais():
-
-    dados = {
-        "Ativo": ["PETR4", "VALE3", "ITUB4", "WEGE3"],
-        "Setup": [
-            "Pullback EMA09",
-            "Rompimento",
-            "Pullback EMA29",
-            "IFR2"
-        ],
-        "Entrada": [38.20, 67.40, 31.10, 52.90],
-        "Alvo": [39.35, 69.42, 32.03, 54.48],
-        "Stop": [36.29, 64.03, 29.54, 50.25],
-        "Score": [92, 88, 85, 81],
-        "Tendência": ["Alta", "Alta", "Alta", "Alta"],
-        "Volume Relativo": [1.8, 2.1, 1.5, 1.3]
-    }
-
-    return pd.DataFrame(dados)
-
-def calcular_indice_mercado():
-    return 7.8
-
-# ==========================================
-# INICIALIZA BANCO
-# ==========================================
-
 inicializar_db()
 
-# ==========================================
-# SIDEBAR
-# ==========================================
+# =========================================================
+# GERADOR DINÂMICO DE DADOS
+# =========================================================
 
-st.sidebar.title("📊 Swing Trade AUVP11")
+@st.cache_data
+def gerar_base_ativos():
+
+    np.random.seed(42)
+
+    ativos = [
+        "PETR4", "VALE3", "ITUB4", "WEGE3",
+        "BBAS3", "PRIO3", "BBDC4", "ABEV3",
+        "EGIE3", "CMIG4", "TAEE11", "CPLE6",
+        "SUZB3", "GGBR4", "RENT3", "RADL3",
+        "LREN3", "JBSS3", "CYRE3", "ELET3"
+    ]
+
+    setups = [
+        "Pullback EMA09",
+        "Pullback EMA29",
+        "Rompimento",
+        "IFR2"
+    ]
+
+    lista = []
+
+    for ativo in ativos:
+
+        entrada = round(np.random.uniform(10, 80), 2)
+
+        variacao = np.random.uniform(0.03, 0.10)
+
+        alvo = round(
+            entrada * (1 + variacao),
+            2
+        )
+
+        stop = round(
+            entrada * (1 - np.random.uniform(0.03, 0.06)),
+            2
+        )
+
+        lista.append({
+            "Ativo": ativo,
+            "Setup": np.random.choice(setups),
+            "Entrada": entrada,
+            "Alvo": alvo,
+            "Stop": stop,
+            "Score": np.random.randint(60, 98),
+            "Volume Relativo": round(
+                np.random.uniform(0.8, 3.5),
+                2
+            ),
+            "ADX": round(
+                np.random.uniform(18, 45),
+                1
+            ),
+            "Tendência": "Alta"
+        })
+
+    return pd.DataFrame(lista)
+
+# =========================================================
+# FUNÇÕES
+# =========================================================
+
+def calcular_indice_mercado(df):
+
+    media_score = df["Score"].mean()
+
+    media_adx = df["ADX"].mean()
+
+    indice = (
+        (media_score * 0.7) +
+        (media_adx * 0.3)
+    ) / 10
+
+    return round(indice, 1)
+
+def aplicar_filtros(
+    df,
+    score_min,
+    setup,
+    volume_min,
+    adx_min
+):
+
+    filtrado = df.copy()
+
+    filtrado = filtrado[
+        filtrado["Score"] >= score_min
+    ]
+
+    filtrado = filtrado[
+        filtrado["Volume Relativo"] >= volume_min
+    ]
+
+    filtrado = filtrado[
+        filtrado["ADX"] >= adx_min
+    ]
+
+    if setup != "Todos":
+        filtrado = filtrado[
+            filtrado["Setup"] == setup
+        ]
+
+    return filtrado
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+
+st.sidebar.title("📈 Swing Trade AUVP11")
 
 st.sidebar.markdown("---")
 
 menu = st.sidebar.radio(
-    "Navegação",
+    "Menu",
     [
         "Dashboard",
         "Scanner",
@@ -135,134 +221,143 @@ menu = st.sidebar.radio(
 
 st.sidebar.markdown("---")
 
-st.sidebar.info(
-    """
-Sistema focado em:
+st.sidebar.markdown("""
+### Estratégia
 
-✅ Swing Trade comprado  
-✅ Tendência forte  
-✅ Continuidade de alta  
-✅ Qualidade acima de quantidade  
-"""
-)
+✅ Operações compradas  
+✅ Tendência de alta  
+✅ Filtro ADX  
+✅ Gestão de risco  
+✅ Continuidade de tendência  
+""")
 
-# ==========================================
-# HEADER PRINCIPAL
-# ==========================================
+# =========================================================
+# BASE PRINCIPAL
+# =========================================================
 
-col1, col2 = st.columns([4, 1])
+df_base = gerar_base_ativos()
+
+# =========================================================
+# HEADER
+# =========================================================
+
+indice_mercado = calcular_indice_mercado(df_base)
+
+col1, col2 = st.columns([5, 1])
 
 with col1:
-    st.title("📈 Swing Trade Profissional — AUVP11")
+    st.title("📈 Swing Trade Profissional")
 
 with col2:
     st.metric(
         "Mercado",
-        f"{calcular_indice_mercado():.1f}/10"
+        f"{indice_mercado}/10"
     )
 
 st.markdown("---")
 
-# ==========================================
+# =========================================================
 # DASHBOARD
-# ==========================================
+# =========================================================
 
 if menu == "Dashboard":
 
     st.subheader("📊 Dashboard Geral")
 
-    indice_mercado = calcular_indice_mercado()
-
-    col1, col2, col3, col4, col5 = st.columns(5)
-
-    with col1:
-        st.metric(
-            "IBOV",
-            "Alta",
-            "+1.24%"
-        )
-
-    with col2:
-        st.metric(
-            "Índice Mercado",
-            f"{indice_mercado:.1f}/10"
-        )
-
-    with col3:
-        st.metric(
-            "Sinais Ativos",
-            "4"
-        )
-
-    with col4:
-        st.metric(
-            "Taxa de Acerto",
-            "71%"
-        )
-
-    with col5:
-        st.metric(
-            "Drawdown",
-            "-4.8%"
-        )
-
-    st.markdown("---")
-
-    st.subheader("🏆 Ranking das Melhores Oportunidades")
-
-    sinais = carregar_sinais()
-
-    sinais = sinais.sort_values(
+    melhores = df_base.sort_values(
         by="Score",
         ascending=False
     )
 
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric(
+            "Ativos",
+            len(df_base)
+        )
+
+    with col2:
+        st.metric(
+            "Score Médio",
+            round(df_base["Score"].mean(), 1)
+        )
+
+    with col3:
+        st.metric(
+            "ADX Médio",
+            round(df_base["ADX"].mean(), 1)
+        )
+
+    with col4:
+        st.metric(
+            "Volume Médio",
+            round(
+                df_base["Volume Relativo"].mean(),
+                2
+            )
+        )
+
+    st.markdown("---")
+
+    st.subheader("🏆 Top Oportunidades")
+
     st.dataframe(
-        sinais,
+        melhores,
         use_container_width=True,
         hide_index=True
     )
 
     st.markdown("---")
 
-    st.subheader("📌 Status do Mercado")
+    grafico = px.bar(
+        melhores.head(10),
+        x="Ativo",
+        y="Score",
+        color="Setup",
+        title="Top 10 Scores"
+    )
 
-    if indice_mercado >= 7:
-        st.success(
-            "Mercado favorável para operações compradas."
-        )
+    st.plotly_chart(
+        grafico,
+        use_container_width=True
+    )
 
-    elif indice_mercado >= 5:
-        st.warning(
-            "Mercado neutro. Operar com seletividade."
-        )
-
-    else:
-        st.error(
-            "Mercado desfavorável. Evitar operações."
-        )
-
-# ==========================================
+# =========================================================
 # SCANNER
-# ==========================================
+# =========================================================
 
 elif menu == "Scanner":
 
-    st.subheader("🔎 Scanner de Oportunidades")
+    st.subheader("🔎 Scanner Inteligente")
 
-    sinais = carregar_sinais()
-
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         score_min = st.slider(
             "Score mínimo",
-            0,
+            60,
             100,
             80
         )
 
     with col2:
+        volume_min = st.slider(
+            "Volume Relativo",
+            0.5,
+            4.0,
+            1.0
+        )
+
+    with col3:
+        adx_min = st.slider(
+            "ADX mínimo",
+            10,
+            50,
+            20
+        )
+
+    with col4:
         setup = st.selectbox(
             "Setup",
             [
@@ -274,54 +369,109 @@ elif menu == "Scanner":
             ]
         )
 
-    with col3:
-        tendencia = st.selectbox(
-            "Tendência",
-            [
-                "Todas",
-                "Alta"
-            ]
-        )
-
-    sinais = sinais[
-        sinais["Score"] >= score_min
-    ]
-
-    if setup != "Todos":
-        sinais = sinais[
-            sinais["Setup"] == setup
-        ]
-
-    if tendencia != "Todas":
-        sinais = sinais[
-            sinais["Tendência"] == tendencia
-        ]
-
-    st.markdown("---")
-
-    st.dataframe(
-        sinais,
-        use_container_width=True,
-        hide_index=True
+    resultado = aplicar_filtros(
+        df_base,
+        score_min,
+        setup,
+        volume_min,
+        adx_min
     )
 
     st.markdown("---")
 
-    if st.button("🔄 Atualizar Scanner"):
-        st.success("Scanner atualizado com sucesso.")
-
-# ==========================================
-# BACKTEST
-# ==========================================
-
-elif menu == "Backtest":
-
-    st.subheader("📈 Backtest dos Setups")
-
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        setup = st.selectbox(
+        st.metric(
+            "Resultados",
+            len(resultado)
+        )
+
+    with col2:
+        if len(resultado) > 0:
+            st.metric(
+                "Melhor Score",
+                resultado["Score"].max()
+            )
+        else:
+            st.metric(
+                "Melhor Score",
+                0
+            )
+
+    with col3:
+        if len(resultado) > 0:
+            st.metric(
+                "ADX Médio",
+                round(
+                    resultado["ADX"].mean(),
+                    1
+                )
+            )
+        else:
+            st.metric(
+                "ADX Médio",
+                0
+            )
+
+    st.markdown("---")
+
+    if len(resultado) == 0:
+
+        st.warning(
+            "Nenhum ativo encontrado com os filtros atuais."
+        )
+
+    else:
+
+        resultado = resultado.sort_values(
+            by="Score",
+            ascending=False
+        )
+
+        st.dataframe(
+            resultado,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.markdown("---")
+
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Scatter(
+                x=resultado["Ativo"],
+                y=resultado["Score"],
+                mode="lines+markers",
+                name="Score"
+            )
+        )
+
+        fig.update_layout(
+            title="Scores dos Ativos Filtrados",
+            template="plotly_dark",
+            height=450
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+# =========================================================
+# BACKTEST
+# =========================================================
+
+elif menu == "Backtest":
+
+    st.subheader("📈 Backtest")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        setup_bt = st.selectbox(
             "Setup",
             [
                 "Pullback EMA09",
@@ -332,21 +482,38 @@ elif menu == "Backtest":
         )
 
     with col2:
-        data_inicio = st.date_input(
-            "Data Inicial"
-        )
 
-    with col3:
-        data_final = st.date_input(
-            "Data Final"
+        quantidade = st.slider(
+            "Quantidade de Trades",
+            20,
+            300,
+            100
         )
-
-    st.markdown("---")
 
     if st.button("▶ Rodar Backtest"):
 
-        st.success(
-            f"Backtest executado para setup: {setup}"
+        np.random.seed(1)
+
+        winrate = round(
+            np.random.uniform(55, 78),
+            1
+        )
+
+        payoff = round(
+            np.random.uniform(1.1, 2.0),
+            2
+        )
+
+        lucro = round(
+            (
+                (winrate / 100) * payoff
+            ) * quantidade / 5,
+            1
+        )
+
+        drawdown = round(
+            np.random.uniform(3, 12),
+            1
         )
 
         col1, col2, col3, col4 = st.columns(4)
@@ -354,134 +521,118 @@ elif menu == "Backtest":
         with col1:
             st.metric(
                 "Win Rate",
-                "72%"
+                f"{winrate}%"
             )
 
         with col2:
             st.metric(
                 "Payoff",
-                "1.43"
+                payoff
             )
 
         with col3:
             st.metric(
-                "Lucro Acumulado",
-                "+28.4%"
+                "Lucro",
+                f"+{lucro}%"
             )
 
         with col4:
             st.metric(
                 "Drawdown",
-                "-6.2%"
+                f"-{drawdown}%"
             )
 
-        st.markdown("---")
-
-        resultado = pd.DataFrame({
-            "Métrica": [
-                "Trades",
-                "Vitórias",
-                "Derrotas",
-                "Taxa Acerto",
-                "Payoff",
-                "Lucro"
-            ],
-            "Resultado": [
-                84,
-                61,
-                23,
-                "72%",
-                1.43,
-                "+28.4%"
-            ]
+        historico = pd.DataFrame({
+            "Trade": range(1, quantidade + 1),
+            "Resultado": np.random.normal(
+                0.8,
+                2.5,
+                quantidade
+            ).cumsum()
         })
 
-        st.dataframe(
-            resultado,
-            use_container_width=True,
-            hide_index=True
+        fig = px.line(
+            historico,
+            x="Trade",
+            y="Resultado",
+            title=f"Evolução Patrimonial — {setup_bt}"
         )
 
-# ==========================================
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+# =========================================================
 # CONFIGURAÇÕES
-# ==========================================
+# =========================================================
 
 elif menu == "Configurações":
 
     st.subheader("⚙️ Configurações")
 
-    st.markdown("### Parâmetros Operacionais")
-
-    gain = st.number_input(
+    gain = st.slider(
         "Take Profit (%)",
-        value=3.0
+        1.0,
+        15.0,
+        8.0
     )
 
-    stop = st.number_input(
+    stop = st.slider(
         "Stop Loss (%)",
-        value=5.0
+        1.0,
+        10.0,
+        5.0
     )
 
-    score = st.number_input(
-        "Score mínimo",
-        value=80
+    score = st.slider(
+        "Score mínimo padrão",
+        50,
+        100,
+        80
     )
 
-    st.markdown("---")
-
-    st.markdown("### Estratégia")
-
-    st.checkbox(
-        "Ativar Pullback EMA09",
-        value=True
+    volume = st.slider(
+        "Volume relativo mínimo",
+        0.5,
+        5.0,
+        1.0
     )
 
-    st.checkbox(
-        "Ativar Pullback EMA29",
-        value=True
-    )
-
-    st.checkbox(
-        "Ativar Rompimento",
-        value=True
-    )
-
-    st.checkbox(
-        "Ativar IFR2",
-        value=True
-    )
-
-    st.markdown("---")
-
-    if st.button("💾 Salvar Configurações"):
+    if st.button("💾 Salvar"):
 
         conn = conectar_db()
+
         cursor = conn.cursor()
 
         cursor.execute("""
             INSERT INTO configuracoes (
                 gain,
                 stop,
-                score
+                score,
+                volume
             )
-            VALUES (?, ?, ?)
-        """, (gain, stop, score))
+            VALUES (?, ?, ?, ?)
+        """, (
+            gain,
+            stop,
+            score,
+            volume
+        ))
 
         conn.commit()
         conn.close()
 
-        st.success("Configurações salvas com sucesso.")
+        st.success(
+            "Configurações salvas com sucesso."
+        )
 
-# ==========================================
+# =========================================================
 # FOOTER
-# ==========================================
+# =========================================================
 
 st.markdown("---")
 
 st.caption(
-    f"""
-Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-
-Sistema profissional de Swing Trade focado em continuidade de tendência.
-"""
+    f"Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
 )
