@@ -39,84 +39,232 @@ VOLUME_MINIMO = 20_000_000
 
 SETORES = {
 
-    # PETRÓLEO
+   # =====================================================
+# CLASSIFICAÇÃO POR SETOR
+# =====================================================
+
+setores = {
+
+    # =====================================================
+    # PETRÓLEO / GÁS
+    # =====================================================
 
     "PETR4.SA": "Petróleo",
     "PRIO3.SA": "Petróleo",
     "RRRP3.SA": "Petróleo",
     "RECV3.SA": "Petróleo",
+    "ENAT3.SA": "Petróleo",
+    "ORVR3.SA": "Petróleo",
 
-    # MINERAÇÃO / SIDERURGIA
+    # =====================================================
+    # MINERAÇÃO / SIDERURGIA / PAPEL
+    # =====================================================
 
     "VALE3.SA": "Mineração",
     "GGBR4.SA": "Siderurgia",
-    "CSNA3.SA": "Siderurgia",
     "GOAU4.SA": "Siderurgia",
     "USIM5.SA": "Siderurgia",
+    "CSNA3.SA": "Siderurgia",
+    "SUZB3.SA": "Papel e Celulose",
 
-    # BANCOS
+    # =====================================================
+    # BANCOS / FINANCEIRO
+    # =====================================================
 
-    "ITUB4.SA": "Bancos",
     "BBAS3.SA": "Bancos",
+    "ITUB4.SA": "Bancos",
     "BBDC4.SA": "Bancos",
-    "SANB11.SA": "Bancos",
     "BPAC11.SA": "Bancos",
+    "SANB11.SA": "Bancos",
+    "BRSR6.SA": "Bancos",
 
-    # ENERGIA
+    "ITSA4.SA": "Holding Financeira",
+    "B3SA3.SA": "Bolsa de Valores",
+    "BBSE3.SA": "Seguros",
+    "CXSE3.SA": "Seguros",
 
-    "EQTL3.SA": "Energia",
+    # =====================================================
+    # ENERGIA ELÉTRICA
+    # =====================================================
+
+    "ELET3.SA": "Energia",
+    "ELET6.SA": "Energia",
+    "CPLE6.SA": "Energia",
+    "CMIG4.SA": "Energia",
     "TAEE11.SA": "Energia",
     "EGIE3.SA": "Energia",
+    "EQTL3.SA": "Energia",
+    "AURE3.SA": "Energia",
+    "ENEV3.SA": "Energia",
 
+    # =====================================================
     # TELECOM
+    # =====================================================
 
     "VIVT3.SA": "Telecom",
     "TIMS3.SA": "Telecom",
 
+    # =====================================================
     # INDUSTRIAL
+    # =====================================================
 
     "WEGE3.SA": "Industrial",
     "EMBR3.SA": "Industrial",
     "TUPY3.SA": "Industrial",
+    "KEPL3.SA": "Industrial",
+    "POMO4.SA": "Industrial",
 
-    # CONSUMO
+    # =====================================================
+    # LOGÍSTICA / TRANSPORTE
+    # =====================================================
 
+    "RAIL3.SA": "Logística",
+    "STBP3.SA": "Logística",
+    "RENT3.SA": "Locação",
+    "MOVI3.SA": "Locação",
+
+    # =====================================================
+    # CONSUMO / VAREJO
+    # =====================================================
+
+    "ABEV3.SA": "Bebidas",
     "RADL3.SA": "Varejo Farma",
     "LREN3.SA": "Varejo",
     "ARZZ3.SA": "Varejo",
+    "MGLU3.SA": "Varejo",
+    "PETZ3.SA": "Varejo Pet",
+    "NTCO3.SA": "Cosméticos",
 
-    # PROTEÍNA
+    # =====================================================
+    # SHOPPINGS / IMOBILIÁRIO
+    # =====================================================
+
+    "MULT3.SA": "Shoppings",
+    "JHSF3.SA": "Shoppings",
+
+    "DIRR3.SA": "Construção",
+    "CYRE3.SA": "Construção",
+    "EZTC3.SA": "Construção",
+
+    # =====================================================
+    # PROTEÍNA / AGRO
+    # =====================================================
 
     "JBSS3.SA": "Proteína",
     "BEEF3.SA": "Proteína",
     "MRFG3.SA": "Proteína",
     "BRFS3.SA": "Proteína",
 
+    "SLCE3.SA": "Agro",
+    "SMTO3.SA": "Agro",
+
+    # =====================================================
     # TECNOLOGIA
+    # =====================================================
 
     "TOTS3.SA": "Tecnologia",
     "POSI3.SA": "Tecnologia",
 
-    # LOGÍSTICA
+    # =====================================================
+    # EDUCAÇÃO
+    # =====================================================
 
-    "RAIL3.SA": "Logística",
-    "STBP3.SA": "Logística",
+    "COGN3.SA": "Educação",
+    "YDUQ3.SA": "Educação",
 
+    # =====================================================
+    # SAÚDE
+    # =====================================================
+
+    "HYPE3.SA": "Saúde",
+
+    # =====================================================
+    # SANEAMENTO
+    # =====================================================
+
+    "SBSP3.SA": "Saneamento",
+
+    # =====================================================
+    # COMBUSTÍVEIS / DISTRIBUIÇÃO
+    # =====================================================
+
+    "UGPA3.SA": "Distribuição Combustíveis",
+
+    # =====================================================
+    # AVIAÇÃO / TURISMO
+    # =====================================================
+
+    "AZUL4.SA": "Aviação",
+    "GOLL4.SA": "Aviação",
+    "CVCB3.SA": "Turismo",
+
+    # =====================================================
     # ETFs
+    # =====================================================
 
     "BOVA11.SA": "ETF",
     "IVVB11.SA": "ETF",
     "SMAL11.SA": "ETF",
     "HASH11.SA": "ETF",
+    "GOLD11.SA": "ETF",
+    "DIVO11.SA": "ETF",
+    "NDIV11.SA": "ETF",
 
+    # =====================================================
+    # FIIs
+    # =====================================================
+
+    "HGLG11.SA": "FII Logística",
+    "XPLG11.SA": "FII Logística",
+
+    "VISC11.SA": "FII Shopping",
+    "HGRU11.SA": "FII Renda Urbana",
+
+    "MXRF11.SA": "FII Papel",
+    "KNCR11.SA": "FII Papel",
+    "KNIP11.SA": "FII Papel",
+    "CPTS11.SA": "FII Papel",
+    "IRDM11.SA": "FII Papel",
+
+    "KNRI11.SA": "FII Híbrido",
+    "TRXF11.SA": "FII Híbrido",
+    "ALZR11.SA": "FII Híbrido",
+    "AUVP11.SA": "FII Híbrido",
+
+    "TGAR11.SA": "FII Desenvolvimento",
+    "GARE11.SA": "FII Agro",
+
+    "IEEX11.SA": "FII Infraestrutura",
+    "UTLL11.SA": "FII Logística",
+
+    # =====================================================
     # BDRs
+    # =====================================================
 
     "AAPL34.SA": "Tecnologia",
+    "AMZO34.SA": "E-commerce",
     "GOGL34.SA": "Tecnologia",
     "MSFT34.SA": "Tecnologia",
     "TSLA34.SA": "Automóveis",
     "META34.SA": "Tecnologia",
-    "NVDC34.SA": "Semicondutores"
+    "NFLX34.SA": "Streaming",
+
+    "NVDC34.SA": "Semicondutores",
+    "MELI34.SA": "E-commerce",
+    "BABA34.SA": "E-commerce",
+    "DISB34.SA": "Entretenimento",
+    "PYPL34.SA": "Pagamentos",
+    "JNJB34.SA": "Saúde",
+    "VISA34.SA": "Pagamentos",
+
+    "WMTB34.SA": "Varejo",
+    "NIKE34.SA": "Vestuário",
+    "ADBE34.SA": "Tecnologia",
+    "CSCO34.SA": "Tecnologia",
+    "INTC34.SA": "Semicondutores",
+    "JPMC34.SA": "Bancos",
+    "ORCL34.SA": "Tecnologia",
+}
 }
 
 # =========================================================
