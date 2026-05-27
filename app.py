@@ -263,7 +263,6 @@ SETORES = {
     "JPMC34.SA": "Bancos",
     "ORCL34.SA": "Tecnologia",
 }
-}
 
 # =========================================================
 # LISTA DE ATIVOS
