@@ -181,6 +181,9 @@ SETORES = {
     # =====================================================
 
     "SBSP3.SA": "Saneamento",
+    "CSMG3.SA": "Saneamento",
+    "SAPR3.SA": "Saneamento",
+    "SAPR4.SA": "Saneamento",
 
     # =====================================================
     # COMBUSTÍVEIS / DISTRIBUIÇÃO
